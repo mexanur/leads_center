@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         const activeIntegrations = await prisma.telegramIntegration.findMany({
           where: { isActive: true },
         });
-        targetChatIds = activeIntegrations.map((i) => i.chatId);
+        targetChatIds = activeIntegrations.map((i: { chatId: string }) => i.chatId);
       }
     }
 
