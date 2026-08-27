@@ -162,64 +162,79 @@ export async function pollAndProcessTelegramUpdates(): Promise<{ pairedCount: nu
       const chatType = chat.type || "private";
       const username = chat.username || message.from?.username || undefined;
 
-      // Extract 4-8 character code
-      const pairMatch = text.match(/(?:LC[-_]?)?([A-Za-z0-9]{4,8})/i);
-      const rawCode = pairMatch ? pairMatch[1].toUpperCase() : null;
-      const fullCode = rawCode ? `LC-${rawCode}` : null;
+      // Extract 4-digit or alphanumeric code e.g. "LC-7212", "7212", "/connect LC-7212", "/start LC-7212"
+      let extractedCode: string | null = null;
+      const directMatch = text.match(/LC[-_]?([A-Za-z0-9]{3,8})/i);
+      if (directMatch) {
+        extractedCode = `LC-${directMatch[1].toUpperCase()}`;
+      } else {
+        const digitsMatch = text.match(/\b([0-9]{4,6})\b/);
+        if (digitsMatch) {
+          extractedCode = `LC-${digitsMatch[1]}`;
+        }
+      }
 
-      // Check if this matches an active pairing code in database
-      const pairingRecord = await prisma.telegramPairingCode.findFirst({
-        where: {
-          OR: [
-            { code: fullCode || "" },
-            { code: rawCode || "" },
-            { code: text },
-          ],
-          expiresAt: { gt: new Date() },
-        },
-      });
-
-      if (pairingRecord) {
-        const existingDefault = await prisma.telegramIntegration.findFirst({
-          where: { isDefault: true },
-        });
-
-        const integration = await prisma.telegramIntegration.upsert({
-          where: { chatId: chatIdStr },
-          create: {
-            chatId: chatIdStr,
-            title: chatTitle,
-            type: chatType,
-            username: username || null,
-            isActive: true,
-            isDefault: !existingDefault,
-          },
-          update: {
-            title: chatTitle,
-            type: chatType,
-            username: username || null,
-            isActive: true,
+      if (extractedCode) {
+        // Check if this matches an active pairing code in database
+        const pairingRecord = await prisma.telegramPairingCode.findFirst({
+          where: {
+            OR: [
+              { code: extractedCode },
+              { code: extractedCode.replace("LC-", "") },
+            ],
+            expiresAt: { gt: new Date() },
           },
         });
 
-        await prisma.telegramPairingCode.delete({
-          where: { id: pairingRecord.id },
-        }).catch(() => {});
+        if (pairingRecord) {
+          const existingDefault = await prisma.telegramIntegration.findFirst({
+            where: { isDefault: true },
+          });
 
-        // Send confirmation in Telegram
-        await sendTelegramMessage(
-          chat.id,
-          `🎉 <b>Connected to Leads Center CRM!</b>
+          const integration = await prisma.telegramIntegration.upsert({
+            where: { chatId: chatIdStr },
+            create: {
+              chatId: chatIdStr,
+              title: chatTitle,
+              type: chatType,
+              username: username || null,
+              isActive: true,
+              isDefault: !existingDefault,
+            },
+            update: {
+              title: chatTitle,
+              type: chatType,
+              username: username || null,
+              isActive: true,
+            },
+          });
+
+          await prisma.telegramPairingCode.delete({
+            where: { id: pairingRecord.id },
+          }).catch(() => {});
+
+          // Send confirmation in Telegram
+          await sendTelegramMessage(
+            chat.id,
+            `🎉 <b>Connected to Leads Center CRM!</b>
 ━━━━━━━━━━━━━━━━━━━━
 🏢 <b>Destination:</b> <b>${chatTitle}</b>
 📌 <b>Type:</b> <code>${chatType.toUpperCase()}</code>
 
 ✅ Recruiters can now share driver profiles and documents directly into this chat from the CRM.`,
-          { parse_mode: "HTML" }
-        );
+            { parse_mode: "HTML" }
+          );
 
-        pairedCount++;
-        newDestinations.push(integration);
+          pairedCount++;
+          newDestinations.push(integration);
+        } else if (text.startsWith("/connect")) {
+          // User provided an expired or incorrect code
+          await sendTelegramMessage(
+            chat.id,
+            `⚠️ <b>Pairing code (${extractedCode}) not found or expired.</b>\nPlease click <b>"Generate Code"</b> in your Leads Center CRM Integrations menu and try again.`,
+            { parse_mode: "HTML" }
+          );
+        }
       } else if (text === "/start" || text === "/connect") {
         await sendTelegramMessage(
           chat.id,
@@ -229,7 +244,7 @@ To connect this chat to your CRM:
 1. Open your <b>Leads Center CRM</b>.
 2. Click your user profile ➔ <b>Integrations (Telegram)</b>.
 3. Click <b>"Generate Code"</b>.
-4. Send the code here (e.g. <code>/connect LC-8032</code>).`,
+4. Send the code here (e.g. <code>/connect LC-7212</code>).`,
           { parse_mode: "HTML" }
         );
       }

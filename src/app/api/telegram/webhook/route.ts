@@ -25,23 +25,29 @@ export async function POST(req: NextRequest) {
     const chatType = chat.type || "private";
     const username = chat.username || message.from?.username || undefined;
 
-    // Check for pairing code: e.g. "/start LC-1234", "/connect LC-1234", "LC-1234", or "/connect 1234"
-    const pairCodeMatch = text.match(/(?:(?:LC[-_]?)|\b)([A-Z0-9]{4,8})\b/i);
-    const rawCode = pairCodeMatch ? pairCodeMatch[1].toUpperCase() : null;
-    const fullCode = rawCode ? `LC-${rawCode}` : null;
-
-    if (text.startsWith("/connect") || text.startsWith("/start") || text.startsWith("LC-")) {
-      // Look for pairing code in database
-      let pairingCodeRecord = null;
-
-      if (fullCode) {
-        pairingCodeRecord = await prisma.telegramPairingCode.findFirst({
-          where: {
-            OR: [{ code: fullCode }, { code: rawCode || "" }],
-            expiresAt: { gt: new Date() },
-          },
-        });
+    // Extract 4-digit or alphanumeric code e.g. "LC-7212", "7212", "/connect LC-7212", "/start LC-7212"
+    let extractedCode: string | null = null;
+    const directMatch = text.match(/LC[-_]?([A-Za-z0-9]{3,8})/i);
+    if (directMatch) {
+      extractedCode = `LC-${directMatch[1].toUpperCase()}`;
+    } else {
+      const digitsMatch = text.match(/\b([0-9]{4,6})\b/);
+      if (digitsMatch) {
+        extractedCode = `LC-${digitsMatch[1]}`;
       }
+    }
+
+    if (extractedCode) {
+      // Look for pairing code in database
+      const pairingCodeRecord = await prisma.telegramPairingCode.findFirst({
+        where: {
+          OR: [
+            { code: extractedCode },
+            { code: extractedCode.replace("LC-", "") },
+          ],
+          expiresAt: { gt: new Date() },
+        },
+      });
 
       if (pairingCodeRecord) {
         // Successful connection!
