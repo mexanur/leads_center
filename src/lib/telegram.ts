@@ -20,10 +20,46 @@ export interface TelegramSendMessageResponse {
   ok: boolean;
   result?: any;
   description?: string;
+  error_code?: number;
+  parameters?: {
+    retry_after?: number;
+  };
 }
 
 /**
- * Send text message to a Telegram Chat (supports HTML parse mode)
+ * Executes a Telegram API request with automatic 429 Rate Limit retry and backoff
+ */
+async function executeTelegramRequest(
+  endpoint: string,
+  body: any,
+  retries = 2
+): Promise<TelegramSendMessageResponse> {
+  try {
+    const res = await fetch(`${TELEGRAM_API_BASE}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data: TelegramSendMessageResponse = await res.json();
+
+    // Handle Telegram 429 Too Many Requests flood control
+    if (!data.ok && data.error_code === 429 && retries > 0) {
+      const waitSeconds = data.parameters?.retry_after || 1;
+      console.warn(`[Telegram Rate Limit] 429 received. Backing off for ${waitSeconds}s...`);
+      await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000 + 100));
+      return executeTelegramRequest(endpoint, body, retries - 1);
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Telegram API request error (${endpoint}):`, error);
+    return { ok: false, description: String(error) };
+  }
+}
+
+/**
+ * Send text message to a Telegram Chat (supports HTML parse mode with rate limit protection)
  */
 export async function sendTelegramMessage(
   chatId: string | number,
@@ -34,28 +70,17 @@ export async function sendTelegramMessage(
     reply_markup?: any;
   }
 ): Promise<TelegramSendMessageResponse> {
-  try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: options?.parse_mode || "HTML",
-        disable_web_page_preview: options?.disable_web_page_preview ?? false,
-        reply_markup: options?.reply_markup,
-      }),
-    });
-
-    return await res.json();
-  } catch (error) {
-    console.error("Telegram sendMessage error:", error);
-    return { ok: false, description: String(error) };
-  }
+  return executeTelegramRequest("sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: options?.parse_mode || "HTML",
+    disable_web_page_preview: options?.disable_web_page_preview ?? false,
+    reply_markup: options?.reply_markup,
+  });
 }
 
 /**
- * Send a document/file to a Telegram Chat using a direct file URL
+ * Send a document/file to a Telegram Chat using a direct file URL with rate limit protection
  */
 export async function sendTelegramDocument(
   chatId: string | number,
@@ -65,27 +90,16 @@ export async function sendTelegramDocument(
     parse_mode?: "HTML" | "Markdown";
   }
 ): Promise<TelegramSendMessageResponse> {
-  try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/sendDocument`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        document: documentUrl,
-        caption: caption || undefined,
-        parse_mode: options?.parse_mode || "HTML",
-      }),
-    });
-
-    return await res.json();
-  } catch (error) {
-    console.error("Telegram sendDocument error:", error);
-    return { ok: false, description: String(error) };
-  }
+  return executeTelegramRequest("sendDocument", {
+    chat_id: chatId,
+    document: documentUrl,
+    caption: caption || undefined,
+    parse_mode: options?.parse_mode || "HTML",
+  });
 }
 
 /**
- * Send a photo to a Telegram Chat using a direct photo URL
+ * Send a photo to a Telegram Chat using a direct photo URL with rate limit protection
  */
 export async function sendTelegramPhoto(
   chatId: string | number,
@@ -95,23 +109,12 @@ export async function sendTelegramPhoto(
     parse_mode?: "HTML" | "Markdown";
   }
 ): Promise<TelegramSendMessageResponse> {
-  try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/sendPhoto`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: photoUrl,
-        caption: caption || undefined,
-        parse_mode: options?.parse_mode || "HTML",
-      }),
-    });
-
-    return await res.json();
-  } catch (error) {
-    console.error("Telegram sendPhoto error:", error);
-    return { ok: false, description: String(error) };
-  }
+  return executeTelegramRequest("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption: caption || undefined,
+    parse_mode: options?.parse_mode || "HTML",
+  });
 }
 
 /**
@@ -129,18 +132,22 @@ export async function getTelegramChat(
   }
 }
 
+// In-memory tracker for last update offset to minimize polling overhead
+let lastProcessedUpdateId = 0;
+
 /**
  * Actively poll Telegram getUpdates queue and process incoming pairing codes and commands
  */
 export async function pollAndProcessTelegramUpdates(): Promise<{ pairedCount: number; newDestinations: any[] }> {
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/getUpdates?offset=-50&timeout=0`);
+    const offsetParam = lastProcessedUpdateId > 0 ? `offset=${lastProcessedUpdateId + 1}&limit=50` : "offset=-20";
+    const res = await fetch(`${TELEGRAM_API_BASE}/getUpdates?${offsetParam}&timeout=0`);
     const data = await res.json();
     if (!data.ok || !Array.isArray(data.result) || data.result.length === 0) {
       return { pairedCount: 0, newDestinations: [] };
     }
 
-    let maxUpdateId = 0;
+    let maxUpdateId = lastProcessedUpdateId;
     let pairedCount = 0;
     const newDestinations: any[] = [];
 
@@ -250,8 +257,9 @@ To connect this chat to your CRM:
       }
     }
 
-    // Acknowledge processed updates so Telegram doesn't queue them forever
-    if (maxUpdateId > 0) {
+    // Acknowledge processed updates and update in-memory high-water mark
+    if (maxUpdateId > lastProcessedUpdateId) {
+      lastProcessedUpdateId = maxUpdateId;
       await fetch(`${TELEGRAM_API_BASE}/getUpdates?offset=${maxUpdateId + 1}&timeout=0`).catch(() => {});
     }
 
@@ -260,6 +268,13 @@ To connect this chat to your CRM:
     console.error("Error in pollAndProcessTelegramUpdates:", error);
     return { pairedCount: 0, newDestinations: [] };
   }
+}
+
+/**
+ * Helper to throttle broadcast dispatches with a delay between items
+ */
+export async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

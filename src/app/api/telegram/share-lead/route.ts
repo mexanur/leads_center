@@ -88,10 +88,11 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // 2. If includeFiles is true and the lead has files attached, send each file
+      // 2. If includeFiles is true and the lead has files attached, send each file with pacing throttle
       if (includeFiles && lead.files && lead.files.length > 0) {
         for (const file of lead.files) {
           try {
+            await new Promise((r) => setTimeout(r, 75)); // Pacing delay to avoid Telegram burst limits
             const isImage =
               file.mimeType?.startsWith("image/") ||
               /\.(jpg|jpeg|png|webp|heic)$/i.test(file.name);
