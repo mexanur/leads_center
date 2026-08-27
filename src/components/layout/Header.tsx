@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   Plus,
   LogOut,
   ChevronDown,
   Users,
+  Kanban,
+  BarChart3,
 } from "lucide-react";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { User } from "@/types";
@@ -32,6 +35,7 @@ export function Header({
   refreshTrigger,
 }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -59,14 +63,42 @@ export function Header({
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors">
       <div className="max-w-[1920px] w-full mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Brand Title */}
-        <div>
-          <h1 className="text-base sm:text-lg font-black tracking-tight text-zinc-900 dark:text-zinc-100 uppercase">
-            Leads Center
-          </h1>
-          <p className="text-[11px] text-zinc-500 font-medium">
-            Truck Driver Recruitment & Pipeline Command
-          </p>
+        {/* Brand Title & Navigation Tabs */}
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-zinc-900 dark:text-zinc-100 uppercase">
+              Leads Center
+            </h1>
+            <p className="text-[11px] text-zinc-500 font-medium">
+              Truck Driver Recruitment & Pipeline Command
+            </p>
+          </div>
+
+          {/* Navigation Tabs */}
+          <nav className="hidden md:flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200/60 dark:border-zinc-800">
+            <Link
+              href="/"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                pathname === "/"
+                  ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/50 dark:hover:bg-zinc-800/50"
+              }`}
+            >
+              <Kanban className="w-3.5 h-3.5" />
+              <span>Pipeline</span>
+            </Link>
+            <Link
+              href="/analytics"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                pathname === "/analytics"
+                  ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/50 dark:hover:bg-zinc-800/50"
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Analytics</span>
+            </Link>
+          </nav>
         </div>
 
         {/* Right Tools: Notification Bell, New Lead, User Profile Menu */}
