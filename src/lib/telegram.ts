@@ -1,3 +1,5 @@
+import prisma from "@/lib/prisma";
+
 export const TELEGRAM_BOT_TOKEN =
   process.env.TELEGRAM_BOT_TOKEN || "7737389966:AAELF5EILnl36aQf-pe80HfVB1CgjOE8xzo";
 export const TELEGRAM_BOT_USERNAME =
@@ -128,22 +130,120 @@ export async function getTelegramChat(
 }
 
 /**
- * Set Webhook URL for the Telegram Bot
+ * Actively poll Telegram getUpdates queue and process incoming pairing codes and commands
  */
-export async function setTelegramWebhook(webhookUrl: string) {
+export async function pollAndProcessTelegramUpdates(): Promise<{ pairedCount: number; newDestinations: any[] }> {
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/setWebhook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ["message", "channel_post"],
-      }),
-    });
-    return await res.json();
+    const res = await fetch(`${TELEGRAM_API_BASE}/getUpdates?offset=-50&timeout=0`);
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.result) || data.result.length === 0) {
+      return { pairedCount: 0, newDestinations: [] };
+    }
+
+    let maxUpdateId = 0;
+    let pairedCount = 0;
+    const newDestinations: any[] = [];
+
+    for (const update of data.result) {
+      if (update.update_id && update.update_id > maxUpdateId) {
+        maxUpdateId = update.update_id;
+      }
+
+      const message = update.message || update.channel_post;
+      if (!message || !message.text) continue;
+
+      const text = message.text.trim();
+      const chat = message.chat;
+      const chatIdStr = String(chat.id);
+      const chatTitle =
+        chat.title ||
+        [chat.first_name, chat.last_name].filter(Boolean).join(" ") ||
+        `Chat ${chat.id}`;
+      const chatType = chat.type || "private";
+      const username = chat.username || message.from?.username || undefined;
+
+      // Extract 4-8 character code
+      const pairMatch = text.match(/(?:LC[-_]?)?([A-Za-z0-9]{4,8})/i);
+      const rawCode = pairMatch ? pairMatch[1].toUpperCase() : null;
+      const fullCode = rawCode ? `LC-${rawCode}` : null;
+
+      // Check if this matches an active pairing code in database
+      const pairingRecord = await prisma.telegramPairingCode.findFirst({
+        where: {
+          OR: [
+            { code: fullCode || "" },
+            { code: rawCode || "" },
+            { code: text },
+          ],
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (pairingRecord) {
+        const existingDefault = await prisma.telegramIntegration.findFirst({
+          where: { isDefault: true },
+        });
+
+        const integration = await prisma.telegramIntegration.upsert({
+          where: { chatId: chatIdStr },
+          create: {
+            chatId: chatIdStr,
+            title: chatTitle,
+            type: chatType,
+            username: username || null,
+            isActive: true,
+            isDefault: !existingDefault,
+          },
+          update: {
+            title: chatTitle,
+            type: chatType,
+            username: username || null,
+            isActive: true,
+          },
+        });
+
+        await prisma.telegramPairingCode.delete({
+          where: { id: pairingRecord.id },
+        }).catch(() => {});
+
+        // Send confirmation in Telegram
+        await sendTelegramMessage(
+          chat.id,
+          `🎉 <b>Connected to Leads Center CRM!</b>
+━━━━━━━━━━━━━━━━━━━━
+🏢 <b>Destination:</b> <b>${chatTitle}</b>
+📌 <b>Type:</b> <code>${chatType.toUpperCase()}</code>
+
+✅ Recruiters can now share driver profiles and documents directly into this chat from the CRM.`,
+          { parse_mode: "HTML" }
+        );
+
+        pairedCount++;
+        newDestinations.push(integration);
+      } else if (text === "/start" || text === "/connect") {
+        await sendTelegramMessage(
+          chat.id,
+          `👋 <b>Welcome to Leads Center Bot (@${TELEGRAM_BOT_USERNAME})</b>
+━━━━━━━━━━━━━━━━━━━━
+To connect this chat to your CRM:
+1. Open your <b>Leads Center CRM</b>.
+2. Click your user profile ➔ <b>Integrations (Telegram)</b>.
+3. Click <b>"Generate Code"</b>.
+4. Send the code here (e.g. <code>/connect LC-8032</code>).`,
+          { parse_mode: "HTML" }
+        );
+      }
+    }
+
+    // Acknowledge processed updates so Telegram doesn't queue them forever
+    if (maxUpdateId > 0) {
+      await fetch(`${TELEGRAM_API_BASE}/getUpdates?offset=${maxUpdateId + 1}&timeout=0`).catch(() => {});
+    }
+
+    return { pairedCount, newDestinations };
   } catch (error) {
-    console.error("Telegram setWebhook error:", error);
-    return { ok: false, description: String(error) };
+    console.error("Error in pollAndProcessTelegramUpdates:", error);
+    return { pairedCount: 0, newDestinations: [] };
   }
 }
 

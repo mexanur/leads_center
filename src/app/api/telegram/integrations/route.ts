@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma";
 import {
   TELEGRAM_BOT_USERNAME,
   TELEGRAM_BOT_TOKEN,
   sendTelegramMessage,
   getTelegramChat,
+  pollAndProcessTelegramUpdates,
 } from "@/lib/telegram";
 
 export async function GET() {
   try {
+    // Process any incoming messages from Telegram first
+    await pollAndProcessTelegramUpdates();
+
     const integrations = await prisma.telegramIntegration.findMany({
       orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
     });
@@ -32,14 +36,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
 
-    // 1. Action: Generate Pairing Code
+    // 1. Action: Sync updates from Telegram
+    if (action === "sync_updates") {
+      const { pairedCount } = await pollAndProcessTelegramUpdates();
+      const integrations = await prisma.telegramIntegration.findMany({
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+      });
+
+      return NextResponse.json({
+        pairedCount,
+        integrations,
+      });
+    }
+
+    // 2. Action: Generate Pairing Code
     if (action === "generate_code") {
       // Clean expired codes first
       await prisma.telegramPairingCode.deleteMany({
         where: { expiresAt: { lt: new Date() } },
       }).catch(() => {});
 
-      // Generate a 4-digit random alphanumeric code
+      // Generate a 4-digit random number
       const randomDigits = Math.floor(1000 + Math.random() * 9000);
       const code = `LC-${randomDigits}`;
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes validity
@@ -59,12 +76,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. Action: Manual Channel Connection (via @channel_username or Chat ID)
+    // 3. Action: Manual Channel / Chat Connection (via @channel_username, User ID, or Chat ID)
     if (action === "manual_connect") {
       const { channelIdentifier, title } = body;
       if (!channelIdentifier) {
         return NextResponse.json(
-          { error: "Channel username or Chat ID is required" },
+          { error: "Username or Chat ID is required" },
           { status: 400 }
         );
       }
@@ -82,7 +99,7 @@ export async function POST(req: NextRequest) {
           {
             error:
               chatInfo.description ||
-              "Could not access Telegram channel. Ensure @kargogroups_bot is added as an Administrator to the channel.",
+              "Could not access Telegram destination. If it's a channel or group, make sure @kargogroups_bot is added as Administrator. If it's a user, send /start to @kargogroups_bot first.",
           },
           { status: 400 }
         );
@@ -90,7 +107,12 @@ export async function POST(req: NextRequest) {
 
       const chat = chatInfo.result;
       const chatIdStr = String(chat.id);
-      const chatTitle = title || chat.title || chat.username || `Channel ${chat.id}`;
+      const chatTitle =
+        title ||
+        chat.title ||
+        [chat.first_name, chat.last_name].filter(Boolean).join(" ") ||
+        chat.username ||
+        `Chat ${chat.id}`;
 
       const existingDefault = await prisma.telegramIntegration.findFirst({
         where: { isDefault: true },
@@ -117,14 +139,14 @@ export async function POST(req: NextRequest) {
       // Send verification message
       await sendTelegramMessage(
         chat.id,
-        `🎉 <b>Connected to Leads Center CRM!</b>\n━━━━━━━━━━━━━━━━━━━━\nThis channel is now connected to receive shared driver leads.`,
+        `🎉 <b>Connected to Leads Center CRM!</b>\n━━━━━━━━━━━━━━━━━━━━\nThis destination is now connected to receive shared driver leads.`,
         { parse_mode: "HTML" }
       );
 
       return NextResponse.json({ success: true, integration });
     }
 
-    // 3. Action: Test Ping Message
+    // 4. Action: Test Ping Message
     if (action === "test_ping") {
       const { chatId } = body;
       if (!chatId) {
@@ -147,14 +169,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // 4. Action: Polling check for pairing code (to auto-detect when user completed pairing in TG)
+    // 5. Action: Check if code paired
     if (action === "check_code_paired") {
       const { code } = body;
+      // Trigger sync
+      await pollAndProcessTelegramUpdates();
+
       const pairing = await prisma.telegramPairingCode.findUnique({
         where: { code },
       });
 
-      // If pairing code no longer exists in DB, it was successfully consumed by the webhook!
       return NextResponse.json({ paired: !pairing });
     }
 
@@ -178,7 +202,6 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (isDefault) {
-      // Clear other defaults
       await prisma.telegramIntegration.updateMany({
         where: { isDefault: true },
         data: { isDefault: false },

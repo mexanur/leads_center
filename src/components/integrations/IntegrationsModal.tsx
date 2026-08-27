@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Plus,
   HelpCircle,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,9 +57,9 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchDestinations = useCallback(async () => {
+  const fetchDestinations = useCallback(async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsLoading(true);
       const res = await fetch("/api/telegram/integrations");
       if (res.ok) {
         const data = await res.json();
@@ -67,19 +68,55 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
       }
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load Telegram destinations");
+      if (showLoading) toast.error("Failed to load Telegram destinations");
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
+    }
+  }, []);
+
+  const syncUpdates = useCallback(async () => {
+    try {
+      const res = await fetch("/api/telegram/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync_updates" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.pairedCount > 0) {
+          toast.success("🎉 Telegram chat successfully connected!");
+          setPairingCode(null);
+        }
+        if (Array.isArray(data.integrations)) {
+          setDestinations(data.integrations);
+        }
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
     }
   }, []);
 
   useEffect(() => {
     if (isOpen) {
-      fetchDestinations();
-    } else {
+      fetchDestinations(true);
+
+      // Continuously poll for incoming messages and pairing commands while modal is open
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = setInterval(syncUpdates, 2000);
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     }
-  }, [isOpen, fetchDestinations]);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [isOpen, fetchDestinations, syncUpdates]);
 
   // Generate a new 4-digit pairing code
   const handleGenerateCode = async () => {
@@ -95,25 +132,6 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
         const data = await res.json();
         setPairingCode(data.code);
         setExpiresAt(new Date(data.expiresAt));
-
-        // Start polling to detect when pairing is done
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = setInterval(async () => {
-          const checkRes = await fetch("/api/telegram/integrations", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "check_code_paired", code: data.code }),
-          });
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.paired) {
-              clearInterval(pollIntervalRef.current!);
-              setPairingCode(null);
-              toast.success("🎉 Telegram chat successfully connected!");
-              fetchDestinations();
-            }
-          }
-        }, 3000);
       } else {
         toast.error("Failed to generate pairing code");
       }
@@ -148,14 +166,14 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success("Connected channel successfully!");
+        toast.success("Connected channel / destination successfully!");
         setChannelInput("");
-        fetchDestinations();
+        fetchDestinations(false);
       } else {
-        toast.error(data.error || "Failed to connect channel");
+        toast.error(data.error || "Failed to connect destination");
       }
     } catch {
-      toast.error("Failed to connect channel");
+      toast.error("Failed to connect destination");
     } finally {
       setIsConnectingChannel(false);
     }
@@ -193,7 +211,7 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
       });
       if (res.ok) {
         toast.success("Set as default Telegram destination");
-        fetchDestinations();
+        fetchDestinations(false);
       }
     } catch {
       toast.error("Failed to update default");
@@ -207,7 +225,7 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
       });
       if (res.ok) {
         toast.success(`Removed ${title}`);
-        fetchDestinations();
+        fetchDestinations(false);
       } else {
         toast.error("Failed to remove destination");
       }
@@ -278,8 +296,9 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
               <div className="mt-3 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 shadow-2xs space-y-3 animate-in zoom-in-95 duration-150">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <span className="text-[10px] uppercase font-black tracking-wider text-blue-600 dark:text-blue-400 block">
-                      Pairing Command
+                    <span className="text-[10px] uppercase font-black tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Listening for incoming Telegram code...
                     </span>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xl sm:text-2xl font-mono font-black text-zinc-900 dark:text-zinc-100">
@@ -324,10 +343,10 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
           <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-3">
             <h3 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
               <Radio className="w-4 h-4 text-purple-600" />
-              <span>Connect Public Broadcast Channel</span>
+              <span>Connect Public Broadcast Channel or Chat ID</span>
             </h3>
             <p className="text-xs text-zinc-500">
-              Ensure <b>@{botUsername}</b> is added as an Administrator to the channel before connecting.
+              Enter a Channel username (e.g. <code>@my_channel</code>) or Chat ID. Make sure <b>@{botUsername}</b> is an Admin.
             </p>
             <form onSubmit={handleManualChannelConnect} className="flex gap-2">
               <input
@@ -355,9 +374,9 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
                 <span>Connected Destinations ({destinations.length})</span>
               </h3>
               <button
-                onClick={fetchDestinations}
+                onClick={() => syncUpdates()}
                 className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                title="Refresh list"
+                title="Sync from Telegram"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
               </button>
@@ -370,7 +389,7 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
                   No Telegram destinations connected yet
                 </p>
                 <p className="text-[11px] text-zinc-400 mt-0.5">
-                  Generate a pairing code above to connect your first chat or group.
+                  Click &ldquo;Generate Code&rdquo; above and send it to @{botUsername} in Telegram!
                 </p>
               </div>
             )}
