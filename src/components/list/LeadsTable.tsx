@@ -15,6 +15,10 @@ import {
   ArrowUpDown,
   DollarSign,
   Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { Lead, PIPELINE_COLUMNS, LeadStatus } from "@/types";
 import { SourceBadge } from "../common/SourceBadge";
@@ -47,6 +51,8 @@ export function LeadsTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortAsc, setSortAsc] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [isModalLoading, setIsModalLoading] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
@@ -88,11 +94,26 @@ export function LeadsTable({
     return sortAsc ? comparison : -comparison;
   });
 
+  const totalLeads = sortedLeads.length;
+  const totalPages = Math.max(1, Math.ceil(totalLeads / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalLeads);
+  const paginatedLeads = sortedLeads.slice(startIndex, endIndex);
+
+  // Check if all items on the current page are selected
+  const isAllCurrentPageSelected =
+    paginatedLeads.length > 0 &&
+    paginatedLeads.every((l) => selectedIds.includes(l.id));
+
   const toggleSelectAll = () => {
-    if (selectedIds.length === leads.length) {
-      setSelectedIds([]);
+    if (isAllCurrentPageSelected) {
+      const pageIds = paginatedLeads.map((l) => l.id);
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
     } else {
-      setSelectedIds(leads.map((l) => l.id));
+      const pageIds = paginatedLeads.map((l) => l.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
     }
   };
 
@@ -298,9 +319,8 @@ export function LeadsTable({
               </th>
             </tr>
           </thead>
-
           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 text-xs">
-            {sortedLeads.map((lead) => {
+            {paginatedLeads.map((lead) => {
               const isSelected = selectedIds.includes(lead.id);
               const cleanPhone = lead.phone ? lead.phone.replace(/\D/g, "") : "";
               const activeReminders = lead.reminders || [];
@@ -311,8 +331,6 @@ export function LeadsTable({
                 : null;
               const latestNote =
                 lead.notes && lead.notes.length > 0 ? lead.notes[0] : null;
-              const notesCount =
-                lead._count?.notes ?? lead.notes?.length ?? 0;
 
               return (
                 <tr
@@ -324,9 +342,12 @@ export function LeadsTable({
                       : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                   }`}
                 >
-                  {/* Select Checkbox */}
-                  <td className="py-4 pl-4 pr-2" onClick={(e) => toggleSelectLead(lead.id, e)}>
-                    <button className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                  {/* Selection Checkbox */}
+                  <td
+                    onClick={(e) => toggleSelectLead(lead.id, e)}
+                    className="py-4 pl-4 pr-2 w-10 shrink-0"
+                  >
+                    <button className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 mt-1">
                       {isSelected ? (
                         <CheckSquare className="w-4 h-4 text-blue-600" />
                       ) : (
@@ -335,66 +356,65 @@ export function LeadsTable({
                     </button>
                   </td>
 
-                  {/* Driver Name & Location */}
+                  {/* Driver Name & Recruiter */}
                   <td className="py-4 px-4 min-w-[200px]">
-                    <div className="flex items-center gap-1.5 flex-wrap whitespace-nowrap">
-                      <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {lead.fullName}
-                      </span>
-                      {lead.locationState && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 shrink-0">
-                          <MapPin className="w-2.5 h-2.5" />
-                          {lead.locationState}
-                        </span>
-                      )}
-                    </div>
-                    {lead.desiredPay && (
-                      <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1 whitespace-nowrap">
-                        <DollarSign className="w-3 h-3" />
-                        <span>{lead.desiredPay}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {lead.fullName}
+                          </span>
+                          {lead.locationState && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {lead.locationState}
+                            </span>
+                          )}
+                        </div>
+
+                        {lead.assignedTo && (
+                          <span className="text-[11px] text-zinc-400 block mt-0.5">
+                            Recruiter: {lead.assignedTo.name}
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </td>
 
-                  {/* Contact info & click to call */}
-                  <td className="py-4 px-4 min-w-[220px]" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2.5 whitespace-nowrap">
-                      <span className="font-semibold text-zinc-800 dark:text-zinc-200 font-mono text-xs">
-                        {lead.phone}
-                      </span>
-
-                      {/* Quick Communication Toolbuttons */}
-                      <div className="flex items-center gap-1">
+                  {/* Contact Info & Quick Actions */}
+                  <td className="py-4 px-4 min-w-[190px]">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300">
+                        <span>{lead.phone}</span>
                         {cleanPhone && (
-                          <>
+                          <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
                             <a
                               href={`tel:${cleanPhone}`}
-                              title="Call Driver"
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                              title="Call driver"
+                              className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                             >
-                              <Phone className="w-3.5 h-3.5" />
+                              <Phone className="w-3 h-3" />
                             </a>
                             <a
                               href={`https://wa.me/${cleanPhone}`}
                               target="_blank"
                               rel="noreferrer"
-                              title="WhatsApp Driver"
-                              className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-300 dark:hover:bg-green-900/60 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                              title="WhatsApp"
+                              className="p-1 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-950/40"
                             >
-                              <MessageCircle className="w-3.5 h-3.5" />
+                              <MessageCircle className="w-3 h-3" />
                             </a>
-                          </>
-                        )}
-                        {lead.email && (
-                          <a
-                            href={`mailto:${lead.email}`}
-                            title={`Email: ${lead.email}`}
-                            className="p-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/60 transition-colors"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                          </a>
+                          </div>
                         )}
                       </div>
+                      {lead.email && (
+                        <div className="flex items-center gap-1 text-[11px] text-zinc-400 truncate max-w-[170px]">
+                          <Mail className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{lead.email}</span>
+                        </div>
+                      )}
                     </div>
                   </td>
 
@@ -403,18 +423,20 @@ export function LeadsTable({
                     <SourceBadge
                       source={lead.source}
                       sourceDetails={lead.sourceDetails}
-                      showDetails
                     />
                   </td>
 
                   {/* Pipeline Stage Select */}
-                  <td className="py-4 px-4 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    onClick={(e) => e.stopPropagation()}
+                    className="py-4 px-4 min-w-[180px]"
+                  >
                     <select
                       value={lead.status}
                       onChange={(e) =>
                         onUpdateLeadStatus(lead.id, e.target.value as LeadStatus)
                       }
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs whitespace-nowrap"
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors shadow-2xs"
                     >
                       {PIPELINE_COLUMNS.map((col) => (
                         <option key={col.id} value={col.id}>
@@ -426,45 +448,54 @@ export function LeadsTable({
 
                   {/* CDL & Experience */}
                   <td className="py-4 px-4 min-w-[180px]">
-                    <CdlBadge
-                      cdlType={lead.cdlType}
-                      experienceYears={lead.experienceYears}
-                      driverType={lead.driverType}
-                    />
+                    <div className="space-y-1">
+                      <CdlBadge
+                        cdlType={lead.cdlType}
+                        experienceYears={lead.experienceYears}
+                        driverType={lead.driverType}
+                      />
+                      {lead.desiredPay && (
+                        <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">
+                          <DollarSign className="w-2.5 h-2.5" />
+                          <span>{lead.desiredPay}</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* Next Reminder */}
-                  <td className="py-4 px-4 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-4 px-4 min-w-[180px]">
                     {nextReminder && reminderAlert ? (
                       <div
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-xs border whitespace-nowrap ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
                           reminderAlert.isOverdue
-                            ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                            ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800 animate-pulse"
                             : reminderAlert.isDueSoon
                             ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
                             : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
                         }`}
-                        title={nextReminder.title}
+                        title={`Reminder: ${nextReminder.title}`}
                       >
-                        <Clock className="w-3.5 h-3.5 shrink-0" />
-                        <span>{reminderAlert.alertText}</span>
+                        <Clock className="w-3 h-3" />
+                        <span className="truncate max-w-[140px]">
+                          {reminderAlert.alertText}
+                        </span>
                       </div>
                     ) : (
                       <button
                         onClick={(e) => onQuickAddReminder(lead.id, e)}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-blue-600 transition-colors whitespace-nowrap"
+                        className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors whitespace-nowrap"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Set reminder
+                        <Plus className="w-3 h-3" /> Set reminder
                       </button>
                     )}
                   </td>
 
                   {/* Latest Note */}
-                  <td className="py-4 px-4 min-w-[220px] max-w-[280px]" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-4 px-4 min-w-[220px]">
                     {latestNote ? (
                       <div
-                        onClick={() => onSelectLead(lead)}
-                        className="text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer"
+                        className="text-xs text-zinc-600 dark:text-zinc-300 truncate max-w-[220px]"
                         title={latestNote.content}
                       >
                         <span className="font-bold text-zinc-500 dark:text-zinc-400 mr-1 whitespace-nowrap">
@@ -507,6 +538,90 @@ export function LeadsTable({
           </div>
         )}
       </div>
+
+      {/* Pagination Controls Toolbar */}
+      {totalLeads > 0 && (
+        <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850 flex items-center justify-between flex-wrap gap-3">
+          {/* Left: Record summary */}
+          <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            Showing{" "}
+            <span className="font-bold text-zinc-900 dark:text-zinc-100">
+              {startIndex + 1}–{endIndex}
+            </span>{" "}
+            of{" "}
+            <span className="font-bold text-zinc-900 dark:text-zinc-100">
+              {totalLeads}
+            </span>{" "}
+            driver leads
+          </div>
+
+          {/* Center: Rows per page selector */}
+          <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Rows per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-xs font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 shadow-2xs"
+            >
+              <option value={15}>15</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+
+          {/* Right: Page Navigation */}
+          <div className="flex items-center gap-1.5">
+            {/* First Page */}
+            <button
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage(1)}
+              title="First Page"
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+
+            {/* Prev Page */}
+            <button
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+
+            {/* Current Page Badge */}
+            <span className="text-xs font-bold px-2 py-1 text-zinc-700 dark:text-zinc-300 bg-zinc-200/80 dark:bg-zinc-700 rounded-lg">
+              {safePage} / {totalPages}
+            </span>
+
+            {/* Next Page */}
+            <button
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Last Page */}
+            <button
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage(totalPages)}
+              title="Last Page"
+              className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 disabled:opacity-40 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Delete Safety Confirmation Modal */}
       <ConfirmationModal
