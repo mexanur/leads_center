@@ -15,6 +15,7 @@ import {
   Calendar,
   UploadCloud,
   Trash2,
+  Send,
 } from "lucide-react";
 import { Lead } from "@/types";
 import { SourceBadge } from "../common/SourceBadge";
@@ -28,6 +29,7 @@ interface LeadCardProps {
   onSelect: (lead: Lead) => void;
   onQuickAddNote: (leadId: string, e: React.MouseEvent) => void;
   onQuickAddReminder: (leadId: string, e: React.MouseEvent) => void;
+  onShareToTelegram?: (lead: Lead) => void;
   onDeleteLead?: (leadId: string) => Promise<void>;
   onLeadUpdated?: () => void;
   isOverlay?: boolean;
@@ -38,6 +40,7 @@ export function LeadCard({
   onSelect,
   onQuickAddNote,
   onQuickAddReminder,
+  onShareToTelegram,
   onDeleteLead,
   onLeadUpdated,
   isOverlay = false,
@@ -245,6 +248,19 @@ export function LeadCard({
                       <MessageCircle className="w-3 h-3" />
                     </a>
                   </>
+                )}
+
+                {onShareToTelegram && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShareToTelegram(lead);
+                    }}
+                    title="Share to Telegram"
+                    className="p-1 rounded-md text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors cursor-pointer"
+                  >
+                    <Send className="w-3 h-3" />
+                  </button>
                 )}
               </div>
             </div>

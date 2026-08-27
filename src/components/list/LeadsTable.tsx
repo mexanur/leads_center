@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Send,
 } from "lucide-react";
 import { Lead, PIPELINE_COLUMNS, LeadStatus } from "@/types";
 import { SourceBadge } from "../common/SourceBadge";
@@ -34,6 +35,7 @@ interface LeadsTableProps {
   onDeleteLead: (leadId: string) => Promise<void>;
   onQuickAddNote: (leadId: string, e: React.MouseEvent) => void;
   onQuickAddReminder: (leadId: string, e: React.MouseEvent) => void;
+  onShareToTelegram?: (lead: Lead) => void;
   onLeadUpdated?: () => void;
 }
 
@@ -46,6 +48,7 @@ export function LeadsTable({
   onDeleteLead,
   onQuickAddNote,
   onQuickAddReminder,
+  onShareToTelegram,
   onLeadUpdated,
 }: LeadsTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -406,6 +409,18 @@ export function LeadsTable({
                             >
                               <MessageCircle className="w-3 h-3" />
                             </a>
+                            {onShareToTelegram && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onShareToTelegram(lead);
+                                }}
+                                title="Share to Telegram"
+                                className="p-1 rounded text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors cursor-pointer"
+                              >
+                                <Send className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

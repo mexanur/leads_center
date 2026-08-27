@@ -139,3 +139,30 @@ model ActivityLog {
   @@index([leadId, createdAt(sort: Desc)])
   @@map("activity_logs")
 }
+
+model TelegramIntegration {
+  id          String   @id @default(cuid())
+  chatId      String   @unique // Telegram Chat ID (positive for users, negative for groups/channels)
+  title       String   // Chat title or User name
+  type        String   // "private" | "group" | "supergroup" | "channel"
+  username    String?  // @username or @channel_name if available
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  addedById   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("telegram_integrations")
+}
+
+model TelegramPairingCode {
+  id        String   @id @default(cuid())
+  code      String   @unique // 6-digit OTC code e.g. "LC-8492"
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([code])
+  @@map("telegram_pairing_codes")
+}
+

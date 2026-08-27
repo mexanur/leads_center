@@ -37,6 +37,7 @@ import {
   RefreshCw,
   Sparkles,
   ArrowRight,
+  Send,
 } from "lucide-react";
 import {
   Lead,
@@ -64,6 +65,7 @@ interface LeadDetailDrawerProps {
   leadId: string | null;
   onClose: () => void;
   onLeadUpdated: () => void;
+  onShareToTelegram?: (lead: Lead) => void;
   recruiters: User[];
   currentUser: User | null;
   defaultTab?: "overview" | "notes" | "reminders" | "files" | "activity";
@@ -76,6 +78,7 @@ export function LeadDetailDrawer({
   leadId,
   onClose,
   onLeadUpdated,
+  onShareToTelegram,
   recruiters,
   currentUser,
   defaultTab = "overview",
@@ -847,6 +850,18 @@ export function LeadDetailDrawer({
                   >
                     SMS
                   </a>
+
+                  {onShareToTelegram && lead && (
+                    <button
+                      type="button"
+                      onClick={() => onShareToTelegram(lead)}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md font-bold text-xs bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900/60 transition-colors cursor-pointer"
+                      title="Share driver profile & documents to Telegram"
+                    >
+                      <Send className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                      <span>Share to Telegram</span>
+                    </button>
+                  )}
                 </div>
               )}
 

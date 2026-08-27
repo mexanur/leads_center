@@ -10,6 +10,7 @@ import {
   Users,
   Kanban,
   BarChart3,
+  Send,
 } from "lucide-react";
 import { NotificationCenter } from "../notifications/NotificationCenter";
 import { User } from "@/types";
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 interface HeaderProps {
   onOpenNewLead: () => void;
   onOpenTeamModal: () => void;
+  onOpenIntegrationsModal?: () => void;
   onSelectLead: (leadId: string) => void;
   recruiters: User[];
   currentUser: User | null;
@@ -28,6 +30,7 @@ interface HeaderProps {
 export function Header({
   onOpenNewLead,
   onOpenTeamModal,
+  onOpenIntegrationsModal,
   onSelectLead,
   recruiters,
   currentUser,
@@ -151,18 +154,31 @@ export function Header({
                   </p>
                 </div>
 
-                {/* Team Management Item */}
+                {/* Team Management & Integrations */}
                 <div className="py-1 border-b border-zinc-100 dark:border-zinc-800">
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
                       onOpenTeamModal();
                     }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors cursor-pointer"
                   >
                     <Users className="w-3.5 h-3.5 text-blue-600" />
                     Manage Team & Recruiters
                   </button>
+
+                  {onOpenIntegrationsModal && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onOpenIntegrationsModal();
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5 text-sky-500" />
+                      Integrations (Telegram)
+                    </button>
+                  )}
                 </div>
 
                 {/* Switch Active Recruiter view */}

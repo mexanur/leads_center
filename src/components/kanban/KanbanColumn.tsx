@@ -17,6 +17,7 @@ interface KanbanColumnProps {
   onQuickAddNote: (leadId: string, e: React.MouseEvent) => void;
   onQuickAddReminder: (leadId: string, e: React.MouseEvent) => void;
   onAddLeadToStage: (stageId: string) => void;
+  onShareToTelegram?: (lead: Lead) => void;
   onDeleteLead?: (leadId: string) => Promise<void>;
   onLeadUpdated?: () => void;
 }
@@ -30,6 +31,7 @@ export function KanbanColumn({
   onQuickAddNote,
   onQuickAddReminder,
   onAddLeadToStage,
+  onShareToTelegram,
   onDeleteLead,
   onLeadUpdated,
 }: KanbanColumnProps) {
@@ -88,6 +90,7 @@ export function KanbanColumn({
               onSelect={onSelectLead}
               onQuickAddNote={onQuickAddNote}
               onQuickAddReminder={onQuickAddReminder}
+              onShareToTelegram={onShareToTelegram}
               onDeleteLead={onDeleteLead}
               onLeadUpdated={onLeadUpdated}
             />

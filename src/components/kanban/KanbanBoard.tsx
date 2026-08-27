@@ -25,6 +25,7 @@ interface KanbanBoardProps {
   onQuickAddNote: (leadId: string, e: React.MouseEvent) => void;
   onQuickAddReminder: (leadId: string, e: React.MouseEvent) => void;
   onAddLeadToStage: (stageId: string) => void;
+  onShareToTelegram?: (lead: Lead) => void;
   onDeleteLead?: (leadId: string) => Promise<void>;
   onLeadUpdated?: () => void;
 }
@@ -36,6 +37,7 @@ export function KanbanBoard({
   onQuickAddNote,
   onQuickAddReminder,
   onAddLeadToStage,
+  onShareToTelegram,
   onDeleteLead,
   onLeadUpdated,
 }: KanbanBoardProps) {
@@ -119,6 +121,7 @@ export function KanbanBoard({
               onQuickAddNote={onQuickAddNote}
               onQuickAddReminder={onQuickAddReminder}
               onAddLeadToStage={onAddLeadToStage}
+              onShareToTelegram={onShareToTelegram}
               onDeleteLead={onDeleteLead}
               onLeadUpdated={onLeadUpdated}
             />

@@ -11,6 +11,8 @@ import { LeadsTable } from "@/components/list/LeadsTable";
 import { LeadDetailDrawer } from "@/components/lead-detail/LeadDetailDrawer";
 import { NewLeadModal } from "@/components/lead-modal/NewLeadModal";
 import { TeamManagementModal } from "@/components/team/TeamManagementModal";
+import { IntegrationsModal } from "@/components/integrations/IntegrationsModal";
+import { ShareToTelegramModal } from "@/components/integrations/ShareToTelegramModal";
 import { Lead, User, LeadStatus } from "@/types";
 
 export default function LeadsCenterPage() {
@@ -42,6 +44,8 @@ export default function LeadsCenterPage() {
   >("overview");
   const [isNewLeadModalOpen, setIsNewLeadModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
+  const [telegramShareLead, setTelegramShareLead] = useState<Lead | null>(null);
   const [newLeadDefaultStatus, setNewLeadDefaultStatus] = useState("NEW_LEAD");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -245,6 +249,7 @@ export default function LeadsCenterPage() {
           setIsNewLeadModalOpen(true);
         }}
         onOpenTeamModal={() => setIsTeamModalOpen(true)}
+        onOpenIntegrationsModal={() => setIsIntegrationsModalOpen(true)}
         onSelectLead={(id) => handleSelectLead({ id })}
         recruiters={recruiters}
         currentUser={currentUser}
@@ -297,6 +302,7 @@ export default function LeadsCenterPage() {
             onQuickAddNote={handleQuickAddNote}
             onQuickAddReminder={handleQuickAddReminder}
             onAddLeadToStage={handleAddLeadToStage}
+            onShareToTelegram={(lead) => setTelegramShareLead(lead)}
             onDeleteLead={handleDeleteLead}
             onLeadUpdated={handleLeadUpdated}
           />
@@ -308,6 +314,7 @@ export default function LeadsCenterPage() {
             onDeleteLead={handleDeleteLead}
             onQuickAddNote={handleQuickAddNote}
             onQuickAddReminder={handleQuickAddReminder}
+            onShareToTelegram={(lead) => setTelegramShareLead(lead)}
             onLeadUpdated={handleLeadUpdated}
           />
         )}
@@ -318,6 +325,7 @@ export default function LeadsCenterPage() {
         leadId={selectedLeadId}
         onClose={() => setSelectedLeadId(null)}
         onLeadUpdated={handleLeadUpdated}
+        onShareToTelegram={(lead) => setTelegramShareLead(lead)}
         recruiters={recruiters}
         currentUser={currentUser}
         defaultTab={drawerDefaultTab}
@@ -346,6 +354,20 @@ export default function LeadsCenterPage() {
           handleLeadUpdated();
         }}
         currentUser={currentUser}
+      />
+
+      {/* Telegram Bot Integrations Management Modal */}
+      <IntegrationsModal
+        isOpen={isIntegrationsModalOpen}
+        onClose={() => setIsIntegrationsModalOpen(false)}
+      />
+
+      {/* Share Lead to Telegram Modal */}
+      <ShareToTelegramModal
+        isOpen={Boolean(telegramShareLead)}
+        lead={telegramShareLead}
+        onClose={() => setTelegramShareLead(null)}
+        onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
       />
     </div>
   );
