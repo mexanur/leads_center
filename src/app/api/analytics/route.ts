@@ -6,11 +6,6 @@ import { LeadStatus, CDLType } from "@/types";
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const timeRange = searchParams.get("timeRange") || "ALL"; // ALL, TODAY, 7D, 30D, 90D, THIS_YEAR
 
