@@ -90,67 +90,78 @@ export function applyFilterToContext(
 }
 
 /**
- * Renders an image with rotation, flip, crop, and filters onto an offscreen canvas
+ * Renders an image with rotation, fine tilt angle, flip, crop, and filters onto an offscreen canvas
  */
 export function renderProcessedCanvas(
   img: HTMLImageElement,
   options: {
     rotation?: number; // 0, 90, 180, 270
+    tiltAngle?: number; // -45 to +45 degrees fine tilt/straighten
     flipH?: boolean;
-    crop?: { x: number; y: number; width: number; height: number }; // In natural image pixels
+    crop?: { x: number; y: number; width: number; height: number }; // In post-rotation coordinates
     filter?: ImageFilterType;
   }
 ): HTMLCanvasElement {
-  const rotation = ((options.rotation || 0) % 360 + 360) % 360;
+  const rotation = options.rotation || 0;
+  const tiltAngle = options.tiltAngle || 0;
+  const totalAngle = ((rotation + tiltAngle) % 360 + 360) % 360;
   const flipH = options.flipH || false;
   const filter = options.filter || "original";
 
-  // Step 1: Handle Crop (if specified) or use full natural dimensions
-  const crop = options.crop || {
-    x: 0,
-    y: 0,
-    width: img.naturalWidth || img.width,
-    height: img.naturalHeight || img.height,
-  };
+  const rad = (totalAngle * Math.PI) / 180;
+  const origW = img.naturalWidth || img.width;
+  const origH = img.naturalHeight || img.height;
 
-  // Determine post-rotation dimensions
-  const isRotated90or270 = rotation === 90 || rotation === 270;
-  const canvasWidth = isRotated90or270 ? crop.height : crop.width;
-  const canvasHeight = isRotated90or270 ? crop.width : crop.height;
+  // Calculate rotated bounding box dimensions
+  const rotW = Math.abs(origW * Math.cos(rad)) + Math.abs(origH * Math.sin(rad));
+  const rotH = Math.abs(origW * Math.sin(rad)) + Math.abs(origH * Math.cos(rad));
 
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(canvasWidth));
-  canvas.height = Math.max(1, Math.round(canvasHeight));
+  // Step 1: Draw full rotated image onto intermediate canvas
+  const rotCanvas = document.createElement("canvas");
+  rotCanvas.width = Math.max(1, Math.round(rotW));
+  rotCanvas.height = Math.max(1, Math.round(rotH));
+  const rotCtx = rotCanvas.getContext("2d");
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return canvas;
+  if (rotCtx) {
+    rotCtx.save();
+    rotCtx.translate(rotCanvas.width / 2, rotCanvas.height / 2);
+    rotCtx.rotate(rad);
+    if (flipH) rotCtx.scale(-1, 1);
+    rotCtx.drawImage(img, -origW / 2, -origH / 2, origW, origH);
+    rotCtx.restore();
+  }
 
-  ctx.save();
+  // Step 2: Handle Crop (if specified) or use the rotated canvas
+  const crop = options.crop;
+  if (!crop) {
+    if (rotCtx) {
+      applyFilterToContext(rotCtx, rotCanvas.width, rotCanvas.height, filter);
+    }
+    return rotCanvas;
+  }
 
-  // Translate to center for rotation & flip
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((rotation * Math.PI) / 180);
-  if (flipH) ctx.scale(-1, 1);
+  // Output cropped canvas
+  const cropCanvas = document.createElement("canvas");
+  cropCanvas.width = Math.max(1, Math.round(crop.width));
+  cropCanvas.height = Math.max(1, Math.round(crop.height));
+  const cropCtx = cropCanvas.getContext("2d");
 
-  // Draw the cropped portion of the image centered
-  ctx.drawImage(
-    img,
-    crop.x,
-    crop.y,
-    crop.width,
-    crop.height,
-    -crop.width / 2,
-    -crop.height / 2,
-    crop.width,
-    crop.height
-  );
+  if (cropCtx) {
+    cropCtx.drawImage(
+      rotCanvas,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      crop.width,
+      crop.height
+    );
+    applyFilterToContext(cropCtx, cropCanvas.width, cropCanvas.height, filter);
+  }
 
-  ctx.restore();
-
-  // Apply visual filter
-  applyFilterToContext(ctx, canvas.width, canvas.height, filter);
-
-  return canvas;
+  return cropCanvas;
 }
 
 /**

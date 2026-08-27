@@ -18,6 +18,10 @@ import {
   Check,
   Move,
   FileDown,
+  SlidersHorizontal,
+  Compass,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { LeadFile } from "@/types";
 import {
@@ -73,7 +77,9 @@ export function DocumentMediaViewer({
   const currentFile = imageFiles[currentIndex] || files[currentIndex];
 
   // Transformation states
-  const [rotation, setRotation] = useState(0);
+  const [rotation, setRotation] = useState(0); // 0, 90, 180, 270
+  const [tiltAngle, setTiltAngle] = useState(0); // -45 to +45 degrees fine straighten tilt
+  const [appliedTilt, setAppliedTilt] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -129,6 +135,8 @@ export function DocumentMediaViewer({
 
   const resetTransformations = () => {
     setRotation(0);
+    setTiltAngle(0);
+    setAppliedTilt(0);
     setFlipH(false);
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -170,8 +178,11 @@ export function DocumentMediaViewer({
     if (!loadedImg || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
+    const activeTilt = isCropMode ? tiltAngle : (appliedCrop ? appliedTilt : 0);
+
     const processed = renderProcessedCanvas(loadedImg, {
       rotation,
+      tiltAngle: activeTilt,
       flipH,
       crop: isCropMode ? undefined : appliedCrop || undefined,
       filter,
@@ -184,7 +195,7 @@ export function DocumentMediaViewer({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(processed, 0, 0);
     }
-  }, [loadedImg, rotation, flipH, appliedCrop, filter, isCropMode]);
+  }, [loadedImg, rotation, tiltAngle, appliedTilt, flipH, appliedCrop, filter, isCropMode]);
 
   // Pan & Drag Handlers when not cropping
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -275,7 +286,7 @@ export function DocumentMediaViewer({
   };
 
   // ==========================================
-  // ADVANCED INTERACTIVE CROPPER ENGINE
+  // ADVANCED INTERACTIVE CROPPER & TILT ENGINE
   // ==========================================
   const handleStartCrop = () => {
     if (!loadedImg) return;
@@ -284,16 +295,11 @@ export function DocumentMediaViewer({
     setIsCropMode(true);
     setCropAspectPreset("free");
 
-    if (appliedCrop && loadedImg) {
-      const naturalW = (rotation === 90 || rotation === 270) ? loadedImg.naturalHeight : loadedImg.naturalWidth;
-      const naturalH = (rotation === 90 || rotation === 270) ? loadedImg.naturalWidth : loadedImg.naturalHeight;
-      setCropBox({
-        x: Math.max(0, (appliedCrop.x / naturalW) * 100),
-        y: Math.max(0, (appliedCrop.y / naturalH) * 100),
-        width: Math.min(100, (appliedCrop.width / naturalW) * 100),
-        height: Math.min(100, (appliedCrop.height / naturalH) * 100),
-      });
+    if (appliedCrop) {
+      setTiltAngle(appliedTilt);
+      setCropBox({ x: 10, y: 10, width: 80, height: 80 });
     } else {
+      setTiltAngle(0);
       setCropBox({ x: 10, y: 10, width: 80, height: 80 });
     }
   };
@@ -444,31 +450,40 @@ export function DocumentMediaViewer({
   const handleApplyCrop = () => {
     if (!loadedImg) return;
 
-    const isRotated90or270 = rotation === 90 || rotation === 270;
-    const baseW = isRotated90or270 ? loadedImg.naturalHeight : loadedImg.naturalWidth;
-    const baseH = isRotated90or270 ? loadedImg.naturalWidth : loadedImg.naturalHeight;
+    const totalAngle = ((rotation + tiltAngle) % 360 + 360) % 360;
+    const rad = (totalAngle * Math.PI) / 180;
+    const origW = loadedImg.naturalWidth || loadedImg.width;
+    const origH = loadedImg.naturalHeight || loadedImg.height;
+
+    // Calculate rotated image container bounds
+    const rotW = Math.abs(origW * Math.cos(rad)) + Math.abs(origH * Math.sin(rad));
+    const rotH = Math.abs(origW * Math.sin(rad)) + Math.abs(origH * Math.cos(rad));
 
     const pixelCrop = {
-      x: Math.round((cropBox.x / 100) * baseW),
-      y: Math.round((cropBox.y / 100) * baseH),
-      width: Math.round((cropBox.width / 100) * baseW),
-      height: Math.round((cropBox.height / 100) * baseH),
+      x: Math.round((cropBox.x / 100) * rotW),
+      y: Math.round((cropBox.y / 100) * rotH),
+      width: Math.round((cropBox.width / 100) * rotW),
+      height: Math.round((cropBox.height / 100) * rotH),
     };
 
     setAppliedCrop(pixelCrop);
+    setAppliedTilt(tiltAngle);
     setIsCropMode(false);
-    toast.success("Crop applied to document");
+    toast.success("Crop & straighten applied");
   };
 
   const handleCancelCrop = () => {
+    setTiltAngle(appliedTilt);
     setIsCropMode(false);
   };
 
   const handleResetCrop = () => {
     setAppliedCrop(null);
+    setAppliedTilt(0);
+    setTiltAngle(0);
     setCropBox({ x: 10, y: 10, width: 80, height: 80 });
     setIsCropMode(false);
-    toast.success("Crop reset to full original image");
+    toast.success("Crop & tilt reset to original");
   };
 
   // Downloads & Exports
@@ -565,17 +580,19 @@ export function DocumentMediaViewer({
               </span>
               <span>•</span>
               <span>{(currentFile.fileSize / 1024 / 1024).toFixed(2)} MB</span>
-              {appliedCrop && (
+              {(appliedCrop || appliedTilt !== 0) && (
                 <>
                   <span>•</span>
-                  <span className="text-amber-400 font-semibold">Cropped</span>
+                  <span className="text-amber-400 font-semibold">
+                    {appliedCrop ? "Cropped" : ""} {appliedTilt !== 0 ? `Straightened (${appliedTilt > 0 ? `+${appliedTilt}°` : `${appliedTilt}°`})` : ""}
+                  </span>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right: Quick Zoom, Presets & Close */}
+        {/* Right: Quick Zoom & Close */}
         <div className="flex items-center gap-2 shrink-0">
           {!isCropMode && (
             <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-xs font-mono">
@@ -640,7 +657,7 @@ export function DocumentMediaViewer({
               {/* Top Mask */}
               <div
                 style={{ top: 0, left: 0, right: 0, height: `${cropBox.y}%` }}
-                className="absolute bg-black/60 backdrop-blur-[1px]"
+                className="absolute bg-black/65 backdrop-blur-[1px]"
               />
               {/* Bottom Mask */}
               <div
@@ -650,7 +667,7 @@ export function DocumentMediaViewer({
                   right: 0,
                   height: `${100 - (cropBox.y + cropBox.height)}%`,
                 }}
-                className="absolute bg-black/60 backdrop-blur-[1px]"
+                className="absolute bg-black/65 backdrop-blur-[1px]"
               />
               {/* Left Mask */}
               <div
@@ -660,7 +677,7 @@ export function DocumentMediaViewer({
                   width: `${cropBox.x}%`,
                   height: `${cropBox.height}%`,
                 }}
-                className="absolute bg-black/60 backdrop-blur-[1px]"
+                className="absolute bg-black/65 backdrop-blur-[1px]"
               />
               {/* Right Mask */}
               <div
@@ -670,7 +687,7 @@ export function DocumentMediaViewer({
                   width: `${100 - (cropBox.x + cropBox.width)}%`,
                   height: `${cropBox.height}%`,
                 }}
-                className="absolute bg-black/60 backdrop-blur-[1px]"
+                className="absolute bg-black/65 backdrop-blur-[1px]"
               />
 
               {/* ACTIVE CROP BOX */}
@@ -682,24 +699,24 @@ export function DocumentMediaViewer({
                   height: `${cropBox.height}%`,
                 }}
                 onPointerDown={(e) => handleCropHandlePointerDown(e, "move")}
-                className="absolute border-2 border-white shadow-2xl ring-1 ring-blue-500/60 cursor-move"
+                className="absolute border-2 border-white shadow-2xl ring-1 ring-blue-500/80 cursor-move"
               >
                 {/* 3x3 Rule-of-Thirds Grid Guidelines */}
                 <div className="w-full h-full grid grid-cols-3 grid-rows-3 pointer-events-none">
-                  <div className="border-r border-b border-white/20" />
-                  <div className="border-r border-b border-white/20" />
-                  <div className="border-b border-white/20" />
-                  <div className="border-r border-b border-white/20" />
-                  <div className="border-r border-b border-white/20" />
-                  <div className="border-b border-white/20" />
-                  <div className="border-r border-white/20" />
-                  <div className="border-r border-white/20" />
+                  <div className="border-r border-b border-white/30" />
+                  <div className="border-r border-b border-white/30" />
+                  <div className="border-b border-white/30" />
+                  <div className="border-r border-b border-white/30" />
+                  <div className="border-r border-b border-white/30" />
+                  <div className="border-b border-white/30" />
+                  <div className="border-r border-white/30" />
+                  <div className="border-r border-white/30" />
                   <div />
                 </div>
 
                 {/* Center Move Indicator Badge */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40 hover:opacity-100 transition-opacity">
-                  <div className="p-1 rounded-full bg-black/50 text-white">
+                  <div className="p-1 rounded-full bg-black/60 text-white">
                     <Move className="w-4 h-4" />
                   </div>
                 </div>
@@ -708,7 +725,7 @@ export function DocumentMediaViewer({
                 {/* NW Top-Left */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "nw")}
-                  className="absolute -top-2.5 -left-2.5 w-6 h-6 flex items-start justify-start cursor-nwse-resize z-40 p-0.5"
+                  className="absolute -top-3 -left-3 w-7 h-7 flex items-start justify-start cursor-nwse-resize z-40 p-0.5"
                   title="Drag to resize top-left"
                 >
                   <div className="w-4 h-4 border-t-3 border-l-3 border-blue-500 bg-white rounded-tl-sm shadow-md" />
@@ -717,7 +734,7 @@ export function DocumentMediaViewer({
                 {/* NE Top-Right */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "ne")}
-                  className="absolute -top-2.5 -right-2.5 w-6 h-6 flex items-start justify-end cursor-nesw-resize z-40 p-0.5"
+                  className="absolute -top-3 -right-3 w-7 h-7 flex items-start justify-end cursor-nesw-resize z-40 p-0.5"
                   title="Drag to resize top-right"
                 >
                   <div className="w-4 h-4 border-t-3 border-r-3 border-blue-500 bg-white rounded-tr-sm shadow-md" />
@@ -726,7 +743,7 @@ export function DocumentMediaViewer({
                 {/* SW Bottom-Left */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "sw")}
-                  className="absolute -bottom-2.5 -left-2.5 w-6 h-6 flex items-end justify-start cursor-nesw-resize z-40 p-0.5"
+                  className="absolute -bottom-3 -left-3 w-7 h-7 flex items-end justify-start cursor-nesw-resize z-40 p-0.5"
                   title="Drag to resize bottom-left"
                 >
                   <div className="w-4 h-4 border-b-3 border-l-3 border-blue-500 bg-white rounded-bl-sm shadow-md" />
@@ -735,7 +752,7 @@ export function DocumentMediaViewer({
                 {/* SE Bottom-Right */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "se")}
-                  className="absolute -bottom-2.5 -right-2.5 w-6 h-6 flex items-end justify-end cursor-nwse-resize z-40 p-0.5"
+                  className="absolute -bottom-3 -right-3 w-7 h-7 flex items-end justify-end cursor-nwse-resize z-40 p-0.5"
                   title="Drag to resize bottom-right"
                 >
                   <div className="w-4 h-4 border-b-3 border-r-3 border-blue-500 bg-white rounded-br-sm shadow-md" />
@@ -745,37 +762,37 @@ export function DocumentMediaViewer({
                 {/* N Top Edge */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "n")}
-                  className="absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-4 flex items-center justify-center cursor-ns-resize z-40"
+                  className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-12 h-5 flex items-center justify-center cursor-ns-resize z-40"
                   title="Drag top edge"
                 >
-                  <div className="w-6 h-1.5 bg-white border border-blue-500 rounded-full shadow-xs" />
+                  <div className="w-7 h-2 bg-white border border-blue-500 rounded-full shadow-xs" />
                 </div>
 
                 {/* S Bottom Edge */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "s")}
-                  className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-10 h-4 flex items-center justify-center cursor-ns-resize z-40"
+                  className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-12 h-5 flex items-center justify-center cursor-ns-resize z-40"
                   title="Drag bottom edge"
                 >
-                  <div className="w-6 h-1.5 bg-white border border-blue-500 rounded-full shadow-xs" />
+                  <div className="w-7 h-2 bg-white border border-blue-500 rounded-full shadow-xs" />
                 </div>
 
                 {/* W Left Edge */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "w")}
-                  className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-10 flex items-center justify-center cursor-ew-resize z-40"
+                  className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-5 h-12 flex items-center justify-center cursor-ew-resize z-40"
                   title="Drag left edge"
                 >
-                  <div className="w-1.5 h-6 bg-white border border-blue-500 rounded-full shadow-xs" />
+                  <div className="w-2 h-7 bg-white border border-blue-500 rounded-full shadow-xs" />
                 </div>
 
                 {/* E Right Edge */}
                 <div
                   onPointerDown={(e) => handleCropHandlePointerDown(e, "e")}
-                  className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-10 flex items-center justify-center cursor-ew-resize z-40"
+                  className="absolute top-1/2 -right-2.5 -translate-y-1/2 w-5 h-12 flex items-center justify-center cursor-ew-resize z-40"
                   title="Drag right edge"
                 >
-                  <div className="w-1.5 h-6 bg-white border border-blue-500 rounded-full shadow-xs" />
+                  <div className="w-2 h-7 bg-white border border-blue-500 rounded-full shadow-xs" />
                 </div>
               </div>
             </div>
@@ -793,11 +810,66 @@ export function DocumentMediaViewer({
 
       {/* Bottom Control Studio Toolbar */}
       <div className="px-4 py-3 border-t border-zinc-800/80 bg-zinc-900/90 shrink-0 flex flex-wrap items-center justify-between gap-3">
-        {/* If Crop Mode is Active: Show Specialized Crop Controls */}
+        {/* If Crop Mode is Active: Show Specialized Crop & Straighten Controls */}
         {isCropMode ? (
-          <div className="w-full flex items-center justify-between gap-3 flex-wrap animate-in fade-in">
-            {/* Aspect Ratio Presets */}
-            <div className="flex items-center gap-1.5 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700/60">
+          <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+            {/* Left: Straighten / Tilt Dial & Slider */}
+            <div className="flex items-center gap-2 bg-zinc-800/80 p-1.5 px-3 rounded-xl border border-zinc-700/60 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
+                <Compass className="w-4 h-4 text-blue-400" />
+                <span>Straighten:</span>
+                <span className="font-mono text-blue-400 font-black min-w-[42px] text-right">
+                  {tiltAngle > 0 ? `+${tiltAngle.toFixed(1)}°` : `${tiltAngle.toFixed(1)}°`}
+                </span>
+              </div>
+
+              {/* Nudge -1° */}
+              <button
+                type="button"
+                onClick={() => setTiltAngle((prev) => Math.max(-45, +(prev - 1).toFixed(1)))}
+                className="p-1 rounded-md bg-zinc-700 hover:bg-zinc-600 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                title="Tilt -1°"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Slider */}
+              <input
+                type="range"
+                min="-45"
+                max="45"
+                step="0.5"
+                value={tiltAngle}
+                onChange={(e) => setTiltAngle(parseFloat(e.target.value))}
+                className="w-28 sm:w-36 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                title="Drag to level and straighten angled document"
+              />
+
+              {/* Nudge +1° */}
+              <button
+                type="button"
+                onClick={() => setTiltAngle((prev) => Math.min(45, +(prev + 1).toFixed(1)))}
+                className="p-1 rounded-md bg-zinc-700 hover:bg-zinc-600 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                title="Tilt +1°"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Reset 0° */}
+              {tiltAngle !== 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTiltAngle(0)}
+                  className="px-2 py-0.5 rounded-md bg-zinc-700 hover:bg-zinc-600 text-[10px] font-bold text-zinc-300 transition-colors cursor-pointer"
+                  title="Reset tilt to 0°"
+                >
+                  0°
+                </button>
+              )}
+            </div>
+
+            {/* Middle: Aspect Ratio Presets */}
+            <div className="flex items-center gap-1.5 bg-zinc-800/80 p-1 rounded-xl border border-zinc-700/60 overflow-x-auto custom-scrollbar">
               <span className="text-[11px] font-bold text-zinc-400 px-2">Aspect:</span>
               {[
                 { id: "free", label: "Freeform" },
@@ -820,8 +892,8 @@ export function DocumentMediaViewer({
               ))}
             </div>
 
-            {/* Apply / Cancel Crop Actions */}
-            <div className="flex items-center gap-2">
+            {/* Right: Apply / Cancel Crop Actions */}
+            <div className="flex items-center gap-2 ml-auto sm:ml-0">
               <button
                 onClick={handleCancelCrop}
                 className="px-4 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold border border-zinc-700 transition-colors cursor-pointer"
@@ -937,25 +1009,25 @@ export function DocumentMediaViewer({
 
               <div className="h-4 w-px bg-zinc-700 mx-0.5" />
 
-              {/* Crop Mode Button */}
+              {/* Crop & Straighten Mode Button */}
               <button
                 onClick={handleStartCrop}
                 className={`p-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                  appliedCrop
+                  appliedCrop || appliedTilt !== 0
                     ? "bg-amber-600 hover:bg-amber-700 text-white"
                     : "bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/40"
                 }`}
-                title="Interactive Edge & Corner Cropping"
+                title="Crop and Straighten/Tilt Image"
               >
                 <Crop className="w-3.5 h-3.5" />
-                <span>{appliedCrop ? "Recrop" : "Crop Image"}</span>
+                <span>{appliedCrop || appliedTilt !== 0 ? "Recrop / Re-straighten" : "Crop & Straighten"}</span>
               </button>
 
-              {appliedCrop && (
+              {(appliedCrop || appliedTilt !== 0) && (
                 <button
                   onClick={handleResetCrop}
                   className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-400 hover:text-red-400 transition-colors"
-                  title="Remove Crop"
+                  title="Remove Crop & Reset Tilt"
                 >
                   <Undo2 className="w-3.5 h-3.5" />
                 </button>
