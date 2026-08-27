@@ -38,6 +38,7 @@ import {
   Sparkles,
   ArrowRight,
   Send,
+  FileDown,
 } from "lucide-react";
 import {
   Lead,
@@ -58,6 +59,8 @@ import {
 import { SourceBadge } from "../common/SourceBadge";
 import { CdlBadge } from "../common/CdlBadge";
 import { ConfirmationModal } from "../common/ConfirmationModal";
+import { DocumentMediaViewer } from "../files/DocumentMediaViewer";
+import { exportMergedDriverFilesAsPdf } from "@/lib/pdf-export";
 import { toast } from "sonner";
 import { formatDate, formatRelativeTime, isReminderAlerting } from "@/lib/utils";
 
@@ -88,6 +91,8 @@ export function LeadDetailDrawer({
   const [activeTab, setActiveTab] = useState<
     "overview" | "notes" | "reminders" | "files" | "activity"
   >(defaultTab);
+  const [viewerFileIndex, setViewerFileIndex] = useState<number | null>(null);
+  const [isExportingMergedPdf, setIsExportingMergedPdf] = useState(false);
 
   // Helper to sync lead fields into form states
   const syncLeadState = (data: Lead) => {
@@ -716,6 +721,43 @@ export function LeadDetailDrawer({
       console.error("Download error:", err);
       // Fallback direct open
       window.open(fileUrl, "_blank");
+    }
+  };
+
+  const handleExportMergedPdf = async (filterType: "original" | "bw_scanner") => {
+    if (!lead || !lead.files || lead.files.length === 0) {
+      toast.error("No documents available to export");
+      return;
+    }
+
+    const imageFiles = lead.files.filter(
+      (f) =>
+        f.mimeType?.startsWith("image/") ||
+        /\.(jpg|jpeg|png|webp|heic|bmp)$/i.test(f.name)
+    );
+
+    if (imageFiles.length === 0) {
+      toast.error("No image files available to compile into PDF");
+      return;
+    }
+
+    try {
+      setIsExportingMergedPdf(true);
+      toast.info(`Preparing ${imageFiles.length} pages for merged PDF export...`);
+      await exportMergedDriverFilesAsPdf(imageFiles, {
+        driverName: lead.fullName,
+        filter: filterType,
+      });
+      toast.success(
+        `Exported ${imageFiles.length} driver files into merged PDF (${
+          filterType === "bw_scanner" ? "Black & White" : "Original"
+        })`
+      );
+    } catch (err) {
+      console.error("Merged PDF export error:", err);
+      toast.error("Failed to generate merged PDF");
+    } finally {
+      setIsExportingMergedPdf(false);
     }
   };
 
@@ -1923,6 +1965,32 @@ export function LeadDetailDrawer({
                             </button>
                           );
                         })}
+
+                        {/* Merged PDF Packet Actions */}
+                        {lead?.files && lead.files.length > 0 && (
+                          <div className="flex items-center gap-1 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleExportMergedPdf("original")}
+                              disabled={isExportingMergedPdf}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Export all attached images as a multi-page PDF packet"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                              <span>PDF Packet</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleExportMergedPdf("bw_scanner")}
+                              disabled={isExportingMergedPdf}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 cursor-pointer"
+                              title="Export all attached images as high-contrast Black & White PDF packet"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                              <span>B&W PDF</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1978,6 +2046,13 @@ export function LeadDetailDrawer({
                               : `${(file.fileSize / 1024).toFixed(0)} KB`
                             : "Unknown size";
 
+                          const imageFiles = (lead?.files || []).filter(
+                            (f) =>
+                              f.mimeType?.startsWith("image/") ||
+                              /\.(jpg|jpeg|png|webp|heic|bmp)$/i.test(f.name)
+                          );
+                          const imgIdx = imageFiles.findIndex((f) => f.id === file.id);
+
                           return (
                             <div
                               key={file.id}
@@ -1992,7 +2067,7 @@ export function LeadDetailDrawer({
                                 <button
                                   type="button"
                                   onClick={() => toggleSelectFile(file.id)}
-                                  className="text-zinc-400 hover:text-blue-600 transition-colors shrink-0"
+                                  className="text-zinc-400 hover:text-blue-600 transition-colors shrink-0 cursor-pointer"
                                 >
                                   {isSelected ? (
                                     <CheckSquare className="w-4 h-4 text-blue-600" />
@@ -2001,7 +2076,14 @@ export function LeadDetailDrawer({
                                   )}
                                 </button>
 
-                                <div className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+                                <div
+                                  onClick={() => {
+                                    if (isImage && imgIdx >= 0) setViewerFileIndex(imgIdx);
+                                  }}
+                                  className={`w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 ${
+                                    isImage ? "cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/40" : ""
+                                  }`}
+                                >
                                   {isPdf ? (
                                     <FileText className="w-5 h-5 text-red-600" />
                                   ) : isImage ? (
@@ -2013,9 +2095,17 @@ export function LeadDetailDrawer({
 
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (isImage && imgIdx >= 0) setViewerFileIndex(imgIdx);
+                                      }}
+                                      className={`text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[220px] text-left ${
+                                        isImage ? "hover:text-blue-600 cursor-pointer" : ""
+                                      }`}
+                                    >
                                       {file.name}
-                                    </span>
+                                    </button>
                                     <span
                                       className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${categoryInfo.badge}`}
                                     >
@@ -2038,23 +2128,34 @@ export function LeadDetailDrawer({
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
-                                {/* Open / Preview in new tab */}
-                                <a
-                                  href={file.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title="Open / View Document"
-                                  className="p-2 rounded-xl text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
-                                >
-                                  <ArrowUpRight className="w-4 h-4" />
-                                </a>
+                                {/* Media Studio / Preview */}
+                                {isImage && imgIdx >= 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewerFileIndex(imgIdx)}
+                                    title="Open in Document Studio (Rotate, Crop, B&W, PDF)"
+                                    className="p-2 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <a
+                                    href={file.fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title="Open / View Document"
+                                    className="p-2 rounded-xl text-zinc-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
+                                  >
+                                    <ArrowUpRight className="w-4 h-4" />
+                                  </a>
+                                )}
 
                                 {/* Direct Forced Download */}
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadFile(file.fileUrl, file.name)}
                                   title="Download File"
-                                  className="p-2 rounded-xl text-zinc-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                  className="p-2 rounded-xl text-zinc-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
                                 >
                                   <Download className="w-4 h-4" />
                                 </button>
@@ -2064,7 +2165,7 @@ export function LeadDetailDrawer({
                                   type="button"
                                   onClick={() => handleDeleteFile(file.id, file.name)}
                                   title="Delete File"
-                                  className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                  className="p-2 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -2301,6 +2402,15 @@ export function LeadDetailDrawer({
         confirmText={confirmModal.confirmText}
         variant={confirmModal.variant}
         isLoading={isModalLoading}
+      />
+
+      {/* Advanced Document & Media Studio Viewer */}
+      <DocumentMediaViewer
+        isOpen={viewerFileIndex !== null}
+        files={lead?.files || []}
+        initialIndex={viewerFileIndex !== null && viewerFileIndex >= 0 ? viewerFileIndex : 0}
+        driverName={lead?.fullName || "Driver Lead"}
+        onClose={() => setViewerFileIndex(null)}
       />
     </div>
   );
