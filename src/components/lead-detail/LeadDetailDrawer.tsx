@@ -39,6 +39,8 @@ import {
   ArrowRight,
   Send,
   FileDown,
+  Pencil,
+  Tag,
 } from "lucide-react";
 import {
   Lead,
@@ -167,9 +169,40 @@ export function LeadDetailDrawer({
   }, [leadId, defaultTab]);
 
   // Note form state
+  const DEFAULT_QUICK_TAGS = [
+    "Left VM",
+    "Interested",
+    "Pay issue",
+    "MVR Clean",
+    "Needs Drug Test",
+    "Follow-up Needed",
+    "Orientation Set",
+  ];
+  const [quickTags, setQuickTags] = useState<string[]>(DEFAULT_QUICK_TAGS);
+  const [isAddingCustomTag, setIsAddingCustomTag] = useState(false);
+  const [newCustomTagInput, setNewCustomTagInput] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteTag, setNewNoteTag] = useState("Call Log - Spoke with Driver");
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  // Note editing state
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [editingNoteTag, setEditingNoteTag] = useState("");
+  const [isUpdatingNote, setIsUpdatingNote] = useState(false);
+
+  // Load custom quick tags from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("leads_center_custom_quick_tags");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQuickTags(parsed);
+        }
+      }
+    } catch {}
+  }, []);
 
   // Reminder form state
   const [newReminderTitle, setNewReminderTitle] = useState("");
@@ -325,6 +358,85 @@ export function LeadDetailDrawer({
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleAddCustomTag = (tagName: string) => {
+    const trimmed = tagName.trim();
+    if (!trimmed) return;
+    if (quickTags.includes(trimmed)) {
+      toast.info(`Tag "${trimmed}" already exists`);
+      setNewNoteTag(trimmed);
+      setIsAddingCustomTag(false);
+      setNewCustomTagInput("");
+      return;
+    }
+    const updated = [...quickTags, trimmed];
+    setQuickTags(updated);
+    try {
+      localStorage.setItem("leads_center_custom_quick_tags", JSON.stringify(updated));
+    } catch {}
+    setNewNoteTag(trimmed);
+    setIsAddingCustomTag(false);
+    setNewCustomTagInput("");
+    toast.success(`Added tag "${trimmed}"`);
+  };
+
+  const handleRemoveCustomTag = (tagToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = quickTags.filter((t) => t !== tagToRemove);
+    setQuickTags(updated);
+    try {
+      localStorage.setItem("leads_center_custom_quick_tags", JSON.stringify(updated));
+    } catch {}
+    if (newNoteTag === tagToRemove) {
+      setNewNoteTag(updated[0] || "General Note");
+    }
+    toast.success(`Removed tag "${tagToRemove}"`);
+  };
+
+  const handleStartEditNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditingNoteContent(note.content);
+    setEditingNoteTag(note.tag || "General Note");
+  };
+
+  const handleCancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteContent("");
+    setEditingNoteTag("");
+  };
+
+  const handleSaveEditNote = async (noteId: string) => {
+    if (!editingNoteContent.trim()) {
+      toast.error("Note content cannot be empty");
+      return;
+    }
+    setIsUpdatingNote(true);
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: editingNoteContent.trim(),
+          tag: editingNoteTag,
+          currentUserName: currentUser?.name || "Recruiter",
+        }),
+      });
+      if (res.ok && lead) {
+        toast.success("Note updated successfully");
+        setEditingNoteId(null);
+        fetchLead(lead.id);
+        onLeadUpdated();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update note");
+      }
+    } catch (err) {
+      console.error("Error updating note:", err);
+      toast.error("Failed to update note");
+    } finally {
+      setIsUpdatingNote(false);
     }
   };
 
@@ -1295,13 +1407,20 @@ export function LeadDetailDrawer({
                   <select
                     value={newNoteTag}
                     onChange={(e) => setNewNoteTag(e.target.value)}
-                    className="text-xs font-semibold px-2 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                    className="text-xs font-semibold px-2 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     {COMMON_NOTE_TAGS.map((tag) => (
                       <option key={tag} value={tag}>
                         {tag}
                       </option>
                     ))}
+                    {quickTags
+                      .filter((q) => !COMMON_NOTE_TAGS.includes(q))
+                      .map((q) => (
+                        <option key={q} value={q}>
+                          {q}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -1314,27 +1433,98 @@ export function LeadDetailDrawer({
                   className="w-full p-2.5 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100"
                 />
 
-                <div className="flex items-center justify-between">
+                {/* Quick tags bar with dynamic Add / Remove custom tags */}
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                    <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
                       Quick tags:
                     </span>
-                    {["Left VM", "Interested", "Pay issue", "MVR Clean"].map((q) => (
+                    {quickTags.map((q) => {
+                      const isSelected = newNoteTag === q;
+                      return (
+                        <div
+                          key={q}
+                          className={`group inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-lg border transition-all ${
+                            isSelected
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : "bg-zinc-200/80 dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border-zinc-300 dark:border-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setNewNoteTag(q)}
+                            className="cursor-pointer"
+                          >
+                            {q}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveCustomTag(q, e)}
+                            title={`Remove "${q}" from quick tags`}
+                            className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {/* Inline Add Custom Tag Form */}
+                    {isAddingCustomTag ? (
+                      <div className="inline-flex items-center gap-1 bg-white dark:bg-zinc-900 border border-blue-500 rounded-lg p-0.5 shadow-xs animate-in fade-in">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={newCustomTagInput}
+                          onChange={(e) => setNewCustomTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddCustomTag(newCustomTagInput);
+                            } else if (e.key === "Escape") {
+                              setIsAddingCustomTag(false);
+                            }
+                          }}
+                          placeholder="Tag name..."
+                          className="px-1.5 py-0.5 text-[10px] bg-transparent text-zinc-900 dark:text-zinc-100 font-semibold focus:outline-none w-24"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddCustomTag(newCustomTagInput)}
+                          className="p-1 rounded bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                          title="Save Tag"
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingCustomTag(false)}
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                          title="Cancel"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        key={q}
-                        onClick={() => setNewNoteTag(q)}
-                        className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                        onClick={() => {
+                          setIsAddingCustomTag(true);
+                          setNewCustomTagInput("");
+                        }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-dashed border-zinc-300 dark:border-zinc-700 hover:text-blue-600 hover:border-blue-400 transition-colors cursor-pointer"
+                        title="Add custom quick tag"
                       >
-                        {q}
+                        <Plus className="w-2.5 h-2.5" />
+                        <span>Add Tag</span>
                       </button>
-                    ))}
+                    )}
                   </div>
 
                   <button
                     type="submit"
                     disabled={isSubmittingNote || !newNoteContent.trim()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-xs cursor-pointer ml-auto"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     {isSubmittingNote ? "Adding..." : "Post Note"}
@@ -1342,48 +1532,159 @@ export function LeadDetailDrawer({
                 </div>
               </form>
 
-              {/* Notes List */}
+              {/* Notes List with Inline Editing */}
               <div className="space-y-3">
                 {lead?.notes && lead.notes.length > 0 ? (
-                  lead.notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="p-3.5 rounded-2xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 shadow-xs"
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white">
-                            {note.author?.name ? note.author.name.charAt(0) : "R"}
+                  lead.notes.map((note) => {
+                    const isEditing = editingNoteId === note.id;
+                    const isEdited =
+                      note.updatedAt &&
+                      new Date(note.updatedAt).getTime() - new Date(note.createdAt).getTime() > 1000;
+
+                    return (
+                      <div
+                        key={note.id}
+                        className={`p-3.5 rounded-2xl border shadow-xs transition-all ${
+                          isEditing
+                            ? "bg-blue-50/40 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 ring-2 ring-blue-500/20"
+                            : "bg-white dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700/80"
+                        }`}
+                      >
+                        {isEditing ? (
+                          /* INLINE EDIT MODE */
+                          <div className="space-y-2.5 animate-in fade-in">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                                <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                                Edit Note
+                              </span>
+                              <select
+                                value={editingNoteTag}
+                                onChange={(e) => setEditingNoteTag(e.target.value)}
+                                className="text-xs font-semibold px-2 py-1 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {COMMON_NOTE_TAGS.map((tag) => (
+                                  <option key={tag} value={tag}>
+                                    {tag}
+                                  </option>
+                                ))}
+                                {quickTags
+                                  .filter((q) => !COMMON_NOTE_TAGS.includes(q))
+                                  .map((q) => (
+                                    <option key={q} value={q}>
+                                      {q}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+
+                            <textarea
+                              rows={3}
+                              value={editingNoteContent}
+                              onChange={(e) => setEditingNoteContent(e.target.value)}
+                              className="w-full p-2.5 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100 font-medium"
+                            />
+
+                            {/* Quick Tags for Edit Mode */}
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-bold text-zinc-400">
+                                  Tags:
+                                </span>
+                                {quickTags.slice(0, 5).map((q) => (
+                                  <button
+                                    type="button"
+                                    key={q}
+                                    onClick={() => setEditingNoteTag(q)}
+                                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors cursor-pointer ${
+                                      editingNoteTag === q
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                                    }`}
+                                  >
+                                    {q}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditNote}
+                                  disabled={isUpdatingNote}
+                                  className="px-3 py-1 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditNote(note.id)}
+                                  disabled={isUpdatingNote || !editingNoteContent.trim()}
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-50 shadow-xs cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>{isUpdatingNote ? "Saving..." : "Save Changes"}</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                            {note.author?.name || "Recruiter"}
-                          </span>
-                          {note.tag && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
-                              {note.tag}
-                            </span>
-                          )}
-                        </div>
+                        ) : (
+                          /* STATIC VIEW MODE */
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
+                                  {note.author?.name ? note.author.name.charAt(0) : "R"}
+                                </div>
+                                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                                  {note.author?.name || "Recruiter"}
+                                </span>
+                                {note.tag && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-600">
+                                    {note.tag}
+                                  </span>
+                                )}
+                              </div>
 
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-zinc-600 dark:text-zinc-300">
-                            {formatDate(note.createdAt)}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteNote(note.id)}
-                            title="Delete note"
-                            className="p-1 rounded text-zinc-300 hover:text-red-600 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                  <span>{formatDate(note.createdAt)}</span>
+                                  {isEdited && (
+                                    <span
+                                      className="text-[10px] text-zinc-400 italic"
+                                      title={`Edited on ${formatDate(note.updatedAt)}`}
+                                    >
+                                      (edited)
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditNote(note)}
+                                  title="Edit note"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteNote(note.id)}
+                                  title="Delete note"
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-line pl-7">
+                              {note.content}
+                            </p>
+                          </div>
+                        )}
                       </div>
-
-                      <p className="text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-line pl-7">
-                        {note.content}
-                      </p>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="py-8 text-center text-zinc-400">
                     <p className="text-xs font-semibold">No notes logged yet.</p>
