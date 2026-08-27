@@ -463,7 +463,11 @@ export default function AnalyticsPage() {
 
                   <div className="space-y-3">
                     {data.recruiterLeaderboard.map((rec, rank) => {
-                      const medalEmojis = ["🥇", "🥈", "🥉"];
+                      const rankColors = [
+                        "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700",
+                        "bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border-zinc-300 dark:border-zinc-700",
+                        "bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+                      ];
 
                       return (
                         <div
@@ -471,8 +475,14 @@ export default function AnalyticsPage() {
                           className="p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-850/50 flex items-center justify-between gap-3"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className="text-base font-black w-6 text-center shrink-0">
-                              {rank < 3 ? medalEmojis[rank] : `#${rank + 1}`}
+                            <span
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black shrink-0 border ${
+                                rank < 3
+                                  ? rankColors[rank]
+                                  : "bg-zinc-100 dark:bg-zinc-850 text-zinc-500 border-zinc-200 dark:border-zinc-800"
+                              }`}
+                            >
+                              #{rank + 1}
                             </span>
                             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-xs shrink-0">
                               {rec.name.charAt(0)}

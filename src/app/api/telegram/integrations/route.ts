@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       // Send verification message
       await sendTelegramMessage(
         chat.id,
-        `🎉 <b>Connected to Leads Center CRM!</b>\n━━━━━━━━━━━━━━━━━━━━\nThis destination is now connected to receive shared driver leads.`,
+        `<b>Connected to Leads Center CRM</b>\n━━━━━━━━━━━━━━━━━━━━\nThis destination is now connected to receive shared driver leads.`,
         { parse_mode: "HTML" }
       );
 
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
 
       const res = await sendTelegramMessage(
         chatId,
-        `🔔 <b>Leads Center CRM Test Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nYour connection to <b>@${TELEGRAM_BOT_USERNAME}</b> is active and working properly!\n🕒 <i>${new Date().toLocaleTimeString()}</i>`,
+        `<b>Leads Center CRM Test Notification</b>\n━━━━━━━━━━━━━━━━━━━━\nYour connection to <b>@${TELEGRAM_BOT_USERNAME}</b> is active and working properly.\n<i>${new Date().toLocaleTimeString()}</i>`,
         { parse_mode: "HTML" }
       );
 

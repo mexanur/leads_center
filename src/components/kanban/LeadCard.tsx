@@ -389,7 +389,7 @@ export function LeadCard({
               ?
             </p>
             <p className="text-red-600 dark:text-red-400 font-semibold text-[11px]">
-              ⚠️ All associated notes, follow-up reminders, documents, and activity history will be permanently deleted.
+              All associated notes, follow-up reminders, documents, and activity history will be permanently deleted.
             </p>
           </div>
         }

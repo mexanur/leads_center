@@ -565,7 +565,7 @@ export function LeadDetailDrawer({
             ({lead.phone})?
           </p>
           <p className="text-red-600 dark:text-red-400 font-semibold text-[11px]">
-            ⚠️ This will permanently remove this driver, all logged notes, active reminders, and timeline activity logs.
+            This will permanently remove this driver, all logged notes, active reminders, and timeline activity logs.
           </p>
         </div>
       ),
@@ -669,7 +669,7 @@ export function LeadDetailDrawer({
             <strong className="text-zinc-900 dark:text-zinc-100 font-bold">{fileName}</strong>?
           </p>
           <p className="text-red-600 dark:text-red-400 font-semibold text-[11px]">
-            ⚠️ This file will be permanently removed from Supabase storage and cannot be restored.
+            This file will be permanently removed from Supabase storage and cannot be restored.
           </p>
         </div>
       ),
@@ -748,7 +748,7 @@ export function LeadDetailDrawer({
             <strong className="text-zinc-900 dark:text-zinc-100 font-bold">{count} selected document(s)</strong>?
           </p>
           <p className="text-red-600 dark:text-red-400 font-semibold text-[11px]">
-            ⚠️ These files will be permanently removed from Supabase cloud storage and cannot be restored.
+            These files will be permanently removed from Supabase cloud storage and cannot be restored.
           </p>
         </div>
       ),
@@ -1825,15 +1825,15 @@ export function LeadDetailDrawer({
                       onChange={(e) => setFileType(e.target.value)}
                       className="w-full p-2 rounded-xl text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="CDL_FRONT">🪪 CDL Front Copy</option>
-                      <option value="CDL_BACK">🪪 CDL Back Copy</option>
-                      <option value="MED_CARD">🩺 DOT Medical Card</option>
-                      <option value="MVR_REPORT">📋 MVR / Driving Record</option>
-                      <option value="RESUME">📄 Resume / Work History</option>
-                      <option value="SSN_CARD">🪪 SSN / ID Document</option>
-                      <option value="DRUG_TEST">🧪 Drug Test / Clearinghouse</option>
-                      <option value="APPLICATION">✍️ Signed Application</option>
-                      <option value="OTHER">📁 Other Document</option>
+                      <option value="CDL_FRONT">CDL Front Copy</option>
+                      <option value="CDL_BACK">CDL Back Copy</option>
+                      <option value="MED_CARD">DOT Medical Card</option>
+                      <option value="MVR_REPORT">MVR / Driving Record</option>
+                      <option value="RESUME">Resume / Work History</option>
+                      <option value="SSN_CARD">SSN / ID Document</option>
+                      <option value="DRUG_TEST">Drug Test / Clearinghouse</option>
+                      <option value="APPLICATION">Signed Application</option>
+                      <option value="OTHER">Other Document</option>
                     </select>
                   </div>
 

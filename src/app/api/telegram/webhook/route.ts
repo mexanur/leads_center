@@ -81,13 +81,13 @@ export async function POST(req: NextRequest) {
         // Send confirmation to Telegram
         await sendTelegramMessage(
           chat.id,
-          `🎉 <b>Connected to Leads Center CRM!</b>
+          `<b>Connected to Leads Center CRM</b>
 ━━━━━━━━━━━━━━━━━━━━
-🏢 <b>Destination:</b> <b>${chatTitle}</b>
-📌 <b>Type:</b> <code>${chatType.toUpperCase()}</code>
-🆔 <b>Chat ID:</b> <code>${chatIdStr}</code>
+<b>Destination:</b> <b>${chatTitle}</b>
+<b>Type:</b> <code>${chatType.toUpperCase()}</code>
+<b>Chat ID:</b> <code>${chatIdStr}</code>
 
-✅ Recruiters can now share driver profiles, CDL documents, and application records directly to this chat from the CRM.`,
+Recruiters can now share driver profiles, CDL documents, and application records directly to this chat from the CRM.`,
           { parse_mode: "HTML" }
         );
 
@@ -98,15 +98,15 @@ export async function POST(req: NextRequest) {
       if (text === "/start" || text === "/help" || text === "/connect") {
         await sendTelegramMessage(
           chat.id,
-          `👋 <b>Welcome to Leads Center Bot (@${TELEGRAM_BOT_USERNAME})</b>
+          `<b>Welcome to Leads Center Bot (@${TELEGRAM_BOT_USERNAME})</b>
 ━━━━━━━━━━━━━━━━━━━━
 To connect this chat to your CRM:
 1. Open your <b>Leads Center CRM</b>.
-2. Click your user profile ➔ <b>Integrations (Telegram)</b>.
-3. Click <b>"Generate Pairing Code"</b>.
+2. Click your user profile -> <b>Integrations (Telegram)</b>.
+3. Click <b>"Generate Code"</b>.
 4. Send the code here (e.g. <code>/connect LC-8492</code>).
 
-<i>Once connected, recruiters can send driver profiles and documents directly into this chat with 1 click!</i>`,
+<i>Once connected, recruiters can send driver profiles and documents directly into this chat with 1 click.</i>`,
           { parse_mode: "HTML" }
         );
         return NextResponse.json({ ok: true });
@@ -120,18 +120,18 @@ To connect this chat to your CRM:
         if (integration) {
           await sendTelegramMessage(
             chat.id,
-            `🟢 <b>Leads Center CRM Status: ACTIVE</b>
+            `<b>Leads Center CRM Status: ACTIVE</b>
 ━━━━━━━━━━━━━━━━━━━━
-🏢 <b>Destination:</b> ${integration.title}
-📌 <b>Type:</b> ${integration.type}
-⭐ <b>Default Chat:</b> ${integration.isDefault ? "Yes" : "No"}
-🕒 <b>Connected Since:</b> ${new Date(integration.createdAt).toLocaleDateString()}`,
+<b>Destination:</b> ${integration.title}
+<b>Type:</b> ${integration.type}
+<b>Default Chat:</b> ${integration.isDefault ? "Yes" : "No"}
+<b>Connected Since:</b> ${new Date(integration.createdAt).toLocaleDateString()}`,
             { parse_mode: "HTML" }
           );
         } else {
           await sendTelegramMessage(
             chat.id,
-            `⚪ <b>Not Connected</b>\nSend <code>/connect &lt;CODE&gt;</code> with the pairing code from your Leads Center CRM Integrations menu.`,
+            `<b>Not Connected</b>\nSend <code>/connect &lt;CODE&gt;</code> with the pairing code from your Leads Center CRM Integrations menu.`,
             { parse_mode: "HTML" }
           );
         }

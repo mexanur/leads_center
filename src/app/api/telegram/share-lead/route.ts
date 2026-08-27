@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "No Telegram destinations connected. Go to user profile ➔ Integrations to connect @kargogroups_bot.",
+            "No Telegram destinations connected. Go to user profile -> Integrations to connect @kargogroups_bot.",
         },
         { status: 400 }
       );
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
             const isImage =
               file.mimeType?.startsWith("image/") ||
               /\.(jpg|jpeg|png|webp|heic)$/i.test(file.name);
-            const caption = `📄 <b>${lead.fullName}</b> — ${file.fileType.replace("_", " ")} (${file.name})`;
+            const caption = `<b>${lead.fullName}</b> — ${file.fileType.replace("_", " ")} (${file.name})`;
 
             if (isImage) {
               await sendTelegramPhoto(chatId, file.fileUrl, caption, {

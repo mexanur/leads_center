@@ -194,7 +194,7 @@ export function NotificationCenter({
 
         // 1. Trigger Browser System Push Notification
         triggerBrowserPushNotification({
-          title: `${alertType === "OVERDUE" ? "🚨 Overdue" : "⏰ Due Soon"}: ${driverName}`,
+          title: `${alertType === "OVERDUE" ? "Overdue" : "Due Soon"}: ${driverName}`,
           body: `${r.title} ${r.lead?.phone ? `(${r.lead.phone})` : ""}`,
           tag: `reminder-${r.id}`,
           leadId: r.leadId,

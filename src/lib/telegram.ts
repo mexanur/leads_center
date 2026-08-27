@@ -223,12 +223,12 @@ export async function pollAndProcessTelegramUpdates(): Promise<{ pairedCount: nu
           // Send confirmation in Telegram
           await sendTelegramMessage(
             chat.id,
-            `🎉 <b>Connected to Leads Center CRM!</b>
+            `<b>Connected to Leads Center CRM</b>
 ━━━━━━━━━━━━━━━━━━━━
-🏢 <b>Destination:</b> <b>${chatTitle}</b>
-📌 <b>Type:</b> <code>${chatType.toUpperCase()}</code>
+<b>Destination:</b> <b>${chatTitle}</b>
+<b>Type:</b> <code>${chatType.toUpperCase()}</code>
 
-✅ Recruiters can now share driver profiles and documents directly into this chat from the CRM.`,
+Recruiters can now share driver profiles and documents directly into this chat from the CRM.`,
             { parse_mode: "HTML" }
           );
 
@@ -238,18 +238,18 @@ export async function pollAndProcessTelegramUpdates(): Promise<{ pairedCount: nu
           // User provided an expired or incorrect code
           await sendTelegramMessage(
             chat.id,
-            `⚠️ <b>Pairing code (${extractedCode}) not found or expired.</b>\nPlease click <b>"Generate Code"</b> in your Leads Center CRM Integrations menu and try again.`,
+            `<b>Pairing code (${extractedCode}) not found or expired.</b>\nPlease click <b>"Generate Code"</b> in your Leads Center CRM Integrations menu and try again.`,
             { parse_mode: "HTML" }
           );
         }
       } else if (text === "/start" || text === "/connect") {
         await sendTelegramMessage(
           chat.id,
-          `👋 <b>Welcome to Leads Center Bot (@${TELEGRAM_BOT_USERNAME})</b>
+          `<b>Welcome to Leads Center Bot (@${TELEGRAM_BOT_USERNAME})</b>
 ━━━━━━━━━━━━━━━━━━━━
 To connect this chat to your CRM:
 1. Open your <b>Leads Center CRM</b>.
-2. Click your user profile ➔ <b>Integrations (Telegram)</b>.
+2. Click your user profile -> <b>Integrations (Telegram)</b>.
 3. Click <b>"Generate Code"</b>.
 4. Send the code here (e.g. <code>/connect LC-7212</code>).`,
           { parse_mode: "HTML" }
@@ -297,12 +297,12 @@ export function formatLeadTelegramMessage(lead: any): string {
   }
 
   const stageTitles: Record<string, string> = {
-    NEW_LEAD: "🔵 New Lead",
-    CONTACTED: "🟡 Contacted",
-    APPLICATION_SENT: "🟣 Application Sent",
-    DOCS_MVR_REVIEW: "🟠 Docs & MVR Review",
-    APPROVED_HIRED: "🟢 Approved & Hired",
-    REJECTED_ARCHIVED: "⚪ Rejected / Archived",
+    NEW_LEAD: "New Lead",
+    CONTACTED: "Contacted",
+    APPLICATION_SENT: "Application Sent",
+    DOCS_MVR_REVIEW: "Docs & MVR Review",
+    APPROVED_HIRED: "Approved & Hired",
+    REJECTED_ARCHIVED: "Rejected / Archived",
   };
 
   const statusTitle = stageTitles[lead.status] || lead.status;
@@ -312,23 +312,23 @@ export function formatLeadTelegramMessage(lead: any): string {
   if (lead.notes && lead.notes.length > 0) {
     const note = lead.notes[0];
     const tag = note.tag ? `[${note.tag}] ` : "";
-    latestNoteHtml = `\n\n📝 <b>Latest Note:</b>\n<i>"${tag}${escapeHtml(note.content)}"</i>`;
+    latestNoteHtml = `\n\n<b>Latest Note:</b>\n<i>"${tag}${escapeHtml(note.content)}"</i>`;
   }
 
-  return `🚛 <b>DRIVER LEAD PROFILE</b>
+  return `<b>DRIVER LEAD PROFILE</b>
 ━━━━━━━━━━━━━━━━━━━━
-👤 <b>Full Name:</b> <b>${escapeHtml(lead.fullName)}</b>
-📞 <b>Phone:</b> <code>${escapeHtml(lead.phone)}</code> ${cleanPhone ? `(<a href="tel:${cleanPhone}">Call</a> • <a href="https://wa.me/${cleanPhone}">WhatsApp</a>)` : ""}
-${lead.email ? `📧 <b>Email:</b> <code>${escapeHtml(lead.email)}</code>\n` : ""}${lead.locationState ? `📍 <b>State:</b> ${escapeHtml(lead.locationState)}\n` : ""}
-📋 <b>Qualifications:</b>
+<b>Full Name:</b> <b>${escapeHtml(lead.fullName)}</b>
+<b>Phone:</b> <code>${escapeHtml(lead.phone)}</code> ${cleanPhone ? `(<a href="tel:${cleanPhone}">Call</a> • <a href="https://wa.me/${cleanPhone}">WhatsApp</a>)` : ""}
+${lead.email ? `<b>Email:</b> <code>${escapeHtml(lead.email)}</code>\n` : ""}${lead.locationState ? `<b>State:</b> ${escapeHtml(lead.locationState)}\n` : ""}
+<b>Qualifications:</b>
 • <b>CDL Class:</b> ${escapeHtml(cdlLabel)}
 • <b>Experience:</b> ${lead.experienceYears || 0} Years
 • <b>Route Type:</b> ${escapeHtml(driverTypeLabel)}
 ${lead.desiredPay ? `• <b>Desired Pay:</b> ${escapeHtml(lead.desiredPay)}\n` : ""}• <b>Endorsements:</b> ${escapeHtml(endorsementsList)}
 
-📊 <b>Pipeline Stage:</b> ${statusTitle}
-🌐 <b>Source:</b> ${escapeHtml(lead.source || "OTHER")}${lead.sourceDetails ? ` (${escapeHtml(lead.sourceDetails)})` : ""}
-${lead.assignedTo?.name ? `👤 <b>Recruiter:</b> ${escapeHtml(lead.assignedTo.name)}\n` : ""}${latestNoteHtml}
+<b>Pipeline Stage:</b> ${statusTitle}
+<b>Source:</b> ${escapeHtml(lead.source || "OTHER")}${lead.sourceDetails ? ` (${escapeHtml(lead.sourceDetails)})` : ""}
+${lead.assignedTo?.name ? `<b>Recruiter:</b> ${escapeHtml(lead.assignedTo.name)}\n` : ""}${latestNoteHtml}
 ━━━━━━━━━━━━━━━━━━━━
 <i>Shared from Leads Center CRM</i>`;
 }

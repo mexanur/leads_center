@@ -107,7 +107,7 @@ export function ShareToTelegramModal({
 
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success(`🚀 Lead profile shared to ${data.sentCount} Telegram chat(s)!`);
+        toast.success(`Lead profile shared to ${data.sentCount} Telegram destination(s)`);
         onClose();
       } else {
         toast.error(data.error || "Failed to share lead to Telegram");

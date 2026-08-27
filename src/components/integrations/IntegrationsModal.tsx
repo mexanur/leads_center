@@ -84,7 +84,7 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
       if (res.ok) {
         const data = await res.json();
         if (data.pairedCount > 0) {
-          toast.success("🎉 Telegram chat successfully connected!");
+          toast.success("Telegram chat successfully connected");
           setPairingCode(null);
         }
         if (Array.isArray(data.integrations)) {
@@ -190,7 +190,7 @@ export function IntegrationsModal({ isOpen, onClose }: IntegrationsModalProps) {
 
       const data = await res.json();
       if (res.ok) {
-        toast.success("✅ Test message delivered to Telegram!");
+        toast.success("Test message delivered to Telegram");
       } else {
         toast.error(data.error || "Failed to deliver test message");
       }
